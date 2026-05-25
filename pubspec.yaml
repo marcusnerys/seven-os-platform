@@ -1,0 +1,57 @@
+name: seven_os_platform
+description: "Aplicativo Flutter para gestão de serviços com IA integrada."
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI & Design
+  cupertino_icons: ^1.0.2
+  google_fonts: ^6.0.0
+
+  # State Management
+  flutter_bloc: ^8.1.0
+  bloc: ^8.1.0
+
+  # API & Data
+  dio: ^5.3.0
+  supabase_flutter: ^2.0.0
+  
+  # AI Integration
+  google_generative_ai: ^0.3.0
+  flutter_dotenv: ^5.1.0
+
+  # Local Storage
+  hive: ^2.2.0
+  hive_flutter: ^1.1.0
+
+  # Utils
+  intl: ^0.19.0
+  uuid: ^4.0.0
+  logger: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Analysis
+  flutter_lints: ^3.0.0
+  
+  # Testing
+  mocktail: ^1.0.0
+  bloc_test: ^9.1.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - .env
