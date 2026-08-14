@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(gh repo create *)",
+      "Bash(gh repo delete *)",
+      "Bash(gh repo fork *)",
+      "Bash(gh issue create *)",
+      "Bash(gh issue comment *)",
+      "Bash(gh issue close *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr comment *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr review *)",
+      "Bash(gh release create *)",
+      "Bash(gh release delete *)",
+      "Bash(twitter post *)",
+      "Bash(twitter reply *)",
+      "Bash(twitter like *)",
+      "Bash(twitter follow *)",
+      "Bash(xhs post *)",
+      "Bash(xhs comment *)",
+      "Bash(xhs like *)",
+      "Bash(rdt post *)",
+      "Bash(rdt comment *)",
+      "Bash(rdt vote *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/agent-reach-readonly.sh",
+            "statusMessage": "Checando modo somente leitura"
+          }
+        ]
+      }
+    ]
+  }
+}
