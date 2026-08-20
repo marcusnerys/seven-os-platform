@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Permanent+Marker&family=Orbitron:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-ios-bg: #0B0B0D;
+  --color-ios-surface: #151518;
+  --color-ios-gold: #D4AF37;
+  --color-ios-cyan: #00E6FF;
+  --color-ios-text-primary: #F5F5F7;
+  --color-ios-text-secondary: #8E8E93;
+  --color-ios-border: rgba(255, 255, 255, 0.06);
+  --color-ios-glass: rgba(255, 255, 255, 0.04);
+  
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "SF Pro Display", "Inter", sans-serif;
+  --font-brush: "Permanent Marker", cursive;
+  --font-futuristic: "Orbitron", sans-serif;
+  
+  --tracking-tightest: -0.05em;
+  --tracking-ios: 0.02em;
+  
+  --radius-ios: 22px; /* Explicit requirement */
+}
+
+@layer base {
+  body {
+    @apply bg-ios-bg text-ios-text-primary overflow-hidden font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3 {
+    @apply tracking-tightest;
+  }
+}
+
+.card-immersive {
+  @apply bg-ios-surface border border-ios-border rounded-ios shadow-[0_8px_24px_rgba(0,0,0,0.2)];
+}
+
+.card-gold-immersive {
+  @apply bg-linear-to-br from-ios-surface to-[#25252A] border border-ios-border border-l-[3px] border-l-ios-gold rounded-ios;
+}
+
+.kpi-card-immersive {
+  @apply bg-ios-glass border border-ios-border rounded-[18px];
+}
+
+.glass-nav {
+  @apply bg-[#1A1A1D]/80 backdrop-blur-[20px] border-t border-ios-border;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.3);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.5);
+}

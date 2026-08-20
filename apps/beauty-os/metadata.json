@@ -1,0 +1,6 @@
+{
+  "name": "Leshanot Studio",
+  "description": "A premium iOS-inspired beauty management platform for luxury studios.",
+  "requestFramePermissions": ["microphone", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
