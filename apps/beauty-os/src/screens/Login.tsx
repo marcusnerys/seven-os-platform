@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Button, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
-import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { LogIn, UserPlus, Key, ArrowLeft, Mail, Lock } from 'lucide-react';
 
 export default function Login() {
@@ -14,56 +13,26 @@ export default function Login() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError('');
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      setError('Falha no login com Google. Tente novamente.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      console.error('Email login failed:', error);
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        setError('E-mail ou senha incorretos.');
-      } else {
-        setError('Erro ao entrar. Verifique sua conexão.');
-      }
-    } finally {
-      setLoading(false);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setError('E-mail ou senha incorretos.');
     }
+    setLoading(false);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      console.error('Registration failed:', error);
-      if (error.code === 'auth/email-already-in-use') {
-        setError('Este e-mail já está em uso.');
-      } else if (error.code === 'auth/weak-password') {
-        setError('A senha deve ter pelo menos 6 caracteres.');
-      } else {
-        setError('Erro ao criar conta. Tente novamente.');
-      }
-    } finally {
-      setLoading(false);
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      setError(error.message.includes('already registered') ? 'Este e-mail já está em uso.' : 'Erro ao criar conta. Tente novamente.');
     }
+    setLoading(false);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -71,15 +40,13 @@ export default function Login() {
     setLoading(true);
     setError('');
     setSuccess('');
-    try {
-      await sendPasswordResetEmail(auth, email);
-      setSuccess('E-mail de recuperação enviado!');
-    } catch (error: any) {
-      console.error('Password reset failed:', error);
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) {
       setError('Erro ao enviar e-mail. Verifique o endereço.');
-    } finally {
-      setLoading(false);
+    } else {
+      setSuccess('E-mail de recuperação enviado!');
     }
+    setLoading(false);
   };
 
   return (
@@ -115,24 +82,8 @@ export default function Login() {
                   <p className="text-[14px] text-ios-text-secondary px-2">Escolha como deseja acessar sua plataforma.</p>
                 </div>
 
-                <Button 
-                  onClick={handleGoogleLogin} 
-                  className="w-full h-14 bg-white text-black hover:bg-white/90"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <LogIn size={20} />
-                      <span>Entrar com Google</span>
-                    </>
-                  )}
-                </Button>
-
-                <Button 
-                  onClick={() => setMode('email')} 
-                  variant="secondary"
+                <Button
+                  onClick={() => setMode('email')}
                   className="w-full h-14"
                   disabled={loading}
                 >

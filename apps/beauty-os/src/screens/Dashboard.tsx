@@ -153,7 +153,7 @@ export default function Dashboard() {
           <div className="flex flex-col">
             <span className="text-[11px] font-medium text-ios-text-secondary">Bem-vinda de volta,</span>
             <h2 className="text-[20px] font-bold tracking-tightest text-white">
-              {user?.displayName || 'Studio'} ✨
+              {user?.user_metadata?.full_name || 'Studio'} ✨
             </h2>
           </div>
           <div className="flex items-center gap-3">
@@ -169,8 +169,8 @@ export default function Dashboard() {
             <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
               <Avatar 
                 size="md" 
-                src={user?.photoURL || undefined}
-                fallback={user?.displayName?.charAt(0) || 'U'} 
+                src={user?.user_metadata?.avatar_url || undefined}
+                fallback={user?.user_metadata?.full_name?.charAt(0) || 'U'} 
               />
               <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera size={12} className="text-white" />

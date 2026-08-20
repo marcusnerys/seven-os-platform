@@ -26,8 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-import { signOut } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { useStore } from '../lib/store';
 import { seedTestData, clearAllData } from '../lib/testData';
 
@@ -79,7 +78,7 @@ export default function More() {
   
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -87,14 +86,14 @@ export default function More() {
 
   const openInAppBrowser = () => {
     if (!user) return;
-    const link = `${window.location.origin}/book/${user.uid}`;
+    const link = `${window.location.origin}/book/${user.id}`;
     setBrowserUrl(link);
     setIsBrowserOpen(true);
   };
 
   const copyBookingLink = () => {
     if (!user) return;
-    const link = `${window.location.origin}/book/${user.uid}`;
+    const link = `${window.location.origin}/book/${user.id}`;
     navigator.clipboard.writeText(link);
     setToast({ message: "Link copiado para a área de transferência", type: 'success' });
   };
@@ -234,7 +233,7 @@ export default function More() {
             if (!user) return;
             setLoadingAction('Gerar Dados de Teste');
             try {
-              await seedTestData(user.uid);
+              await seedTestData(user.id);
               setToast({ message: "Dados de teste gerados!", type: 'success' });
             } catch (e) {
               setToast({ message: "Erro ao gerar dados", type: 'error' });
@@ -252,7 +251,7 @@ export default function More() {
             if (confirm("Isso apagará TODOS os seus dados do banco. Deseja continuar?")) {
               setLoadingAction('Limpar Todos os Dados');
               try {
-                await clearAllData(user.uid);
+                await clearAllData(user.id);
                 setToast({ message: "Banco de dados limpo!", type: 'success' });
               } catch (e) {
                 setToast({ message: "Erro ao limpar dados", type: 'error' });
@@ -280,8 +279,8 @@ export default function More() {
         <GlassCard className="p-5 flex items-center gap-4 bg-ios-surface border-none mb-8">
            <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
              <Avatar 
-               src={user?.photoURL || undefined}
-               fallback={user?.displayName?.charAt(0) || 'U'} 
+               src={user?.user_metadata?.avatar_url || undefined}
+               fallback={user?.user_metadata?.full_name?.charAt(0) || 'U'} 
                size="lg" 
              />
              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -297,7 +296,7 @@ export default function More() {
            </div>
            <div className="flex-1">
              <h3 className="text-[18px] font-bold text-white tracking-tightest">
-               {user?.displayName || 'Usuário'}
+               {user?.user_metadata?.full_name || 'Usuário'}
              </h3>
              <p className="text-[12px] text-ios-text-secondary font-medium">
                {user?.email || 'studio@leshanot.com'}

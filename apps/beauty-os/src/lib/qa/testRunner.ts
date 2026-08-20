@@ -1,8 +1,7 @@
 import { useStore } from '../store';
 import { TestResult, TestStatus } from './types';
 import { logger } from './logger';
-import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../supabase';
 
 export class TestRunner {
   private static results: TestResult[] = [];
@@ -58,20 +57,24 @@ export class TestRunner {
     try {
       const today = new Date().toISOString().split('T')[0];
       const testAppt = {
-        clientId: 'test-qa-client',
-        clientName: 'QA Test Client',
-        clientPhone: '00000000000',
+        empresa_id: userId,
+        client_name: 'QA Test Client',
+        client_phone: '00000000000',
         service: 'Teste QA',
         time: '23:59', // Extreme time for test
         date: today,
         duration: 30,
         status: 'Pendente',
         price: 1,
-        createdAt: new Date().toISOString()
       };
 
       // 1. Create
-      const docRef = await addDoc(collection(db, `users/${userId}/appointments`), testAppt);
+      const { data: created, error: createError } = await supabase
+        .from('beautyos_appointments')
+        .insert(testAppt)
+        .select()
+        .single();
+      if (createError) throw createError;
       this.addResult('Criação de Agendamento', module, 'PASSED');
 
       // 2. Conflict Test (should find itself or others)
@@ -84,7 +87,7 @@ export class TestRunner {
       }
 
       // 3. Cleanup
-      await deleteDoc(doc(db, `users/${userId}/appointments`, docRef.id));
+      await supabase.from('beautyos_appointments').delete().eq('id', created.id);
       this.addResult('Remoção de Agendamento', module, 'PASSED');
 
     } catch (e) {

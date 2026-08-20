@@ -25,8 +25,7 @@ import {
 import { GlassCard, Button, Toast } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { cn } from '../lib/utils';
-import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 
 const CATEGORIES = [
   { id: 'all', name: 'Todos', icon: Sparkles },
@@ -123,19 +122,15 @@ export default function BookingPage() {
 
   useEffect(() => {
     if (userId) {
-      // Try to fetch professional info
-      getDoc(doc(db, 'users', userId)).then(snap => {
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.displayName) setProfessionalName(data.displayName);
-        }
+      // Try to fetch studio name (público)
+      supabase.from('beautyos_settings').select('studio_name').eq('empresa_id', userId).maybeSingle().then(({ data }) => {
+        if (data?.studio_name) setProfessionalName(data.studio_name);
       });
 
-      // Fetch services from DB
-      const servicesPath = `users/${userId}/services`;
-      getDocs(collection(db, servicesPath)).then(snap => {
-        if (!snap.empty) {
-          const servicesList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Fetch services from DB (público)
+      supabase.from('beautyos_services').select('*').eq('empresa_id', userId).then(({ data }) => {
+        if (data && data.length > 0) {
+          const servicesList = data.map(row => ({ id: row.id, name: row.name, price: Number(row.price) || 0, duration: row.duration }));
           setServices(prev => [...prev, ...servicesList]);
         }
       });
@@ -153,15 +148,15 @@ export default function BookingPage() {
   useEffect(() => {
     if (selectedDate && userId) {
       const dateStr = selectedDate.toISOString().split('T')[0];
-      // Fetch occupied slots for selected date
-      const q = query(
-        collection(db, `users/${userId}/appointments`),
-        where('date', '==', dateStr)
-      );
-      getDocs(q).then(snap => {
-        const slots = snap.docs.map(doc => doc.data().time);
-        setOccupiedSlots(slots);
-      });
+      // Fetch occupied slots for selected date (via view pública, sem dados do cliente)
+      supabase
+        .from('beautyos_public_slots')
+        .select('time')
+        .eq('empresa_id', userId)
+        .eq('date', dateStr)
+        .then(({ data }) => {
+          setOccupiedSlots((data ?? []).map(row => row.time));
+        });
     }
   }, [selectedDate, userId]);
 
@@ -210,31 +205,32 @@ export default function BookingPage() {
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
       const appointmentData = {
-        clientId: 'public-booking',
-        clientName: clientInfo.name, 
-        clientPhone: clientInfo.phone,
+        empresa_id: userId,
+        client_id: null,
+        client_name: clientInfo.name,
+        client_phone: clientInfo.phone,
         service: selectedService.name,
-        professional: selectedProfessional.name,
         date: dateStr,
         time: selectedTime,
         price: selectedService.price,
         duration: selectedService.duration,
         status: 'Pendente',
         notes: clientInfo.notes,
-        createdAt: new Date().toISOString()
       };
-      
-      // Save appointment
-      await addDoc(collection(db, `users/${userId}/appointments`), appointmentData);
-      
-      // Save notification for the studio
-      await addDoc(collection(db, `users/${userId}/notifications`), {
+
+      // Save appointment (policy pública: só permite client_id null + status Pendente)
+      const { error: apptError } = await supabase.from('beautyos_appointments').insert(appointmentData);
+      if (apptError) throw apptError;
+
+      // Save notification for the studio (policy pública: só type 'booking' + read false)
+      const { error: notifError } = await supabase.from('beautyos_notifications').insert({
+        empresa_id: userId,
         title: 'Nova reserva recebida',
         message: `${selectedService.name} • ${selectedTime}\nCliente: ${clientInfo.name}`,
         type: 'booking',
         read: false,
-        createdAt: new Date().toISOString()
       });
+      if (notifError) throw notifError;
 
       setIsSuccess(true);
     } catch (error) {

@@ -50,7 +50,7 @@ export default function DevTools({ onClose }: { onClose: () => void }) {
   const runTests = async () => {
     if (!user) return;
     setIsRunningTests(true);
-    const newResults = await TestRunner.runAll(user.uid);
+    const newResults = await TestRunner.runAll(user.id);
     if (newResults) setResults([...newResults]);
     setIsRunningTests(false);
   };
@@ -146,7 +146,7 @@ export default function DevTools({ onClose }: { onClose: () => void }) {
                   <Button 
                     variant="outline" 
                     className="justify-start border-white/5 hover:border-ios-gold/30 h-14"
-                    onClick={() => user && seedTestData(user.uid)}
+                    onClick={() => user && seedTestData(user.id)}
                   >
                     <Zap size={16} className="mr-3 text-ios-cyan" />
                     <div className="text-left">
@@ -157,7 +157,7 @@ export default function DevTools({ onClose }: { onClose: () => void }) {
                   <Button 
                     variant="outline" 
                     className="justify-start border-white/5 hover:border-red-500/30 h-14"
-                    onClick={() => user && clearAllData(user.uid)}
+                    onClick={() => user && clearAllData(user.id)}
                   >
                     <Trash2 size={16} className="mr-3 text-red-500" />
                     <div className="text-left">
@@ -360,7 +360,7 @@ export default function DevTools({ onClose }: { onClose: () => void }) {
                   <div className="flex items-start gap-3 p-3 bg-red-500/10 rounded-xl border border-red-500/20">
                      <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
                      <div className="text-[11px] text-white/90">
-                       Firestore: Permissão negada ao acessar coleção 'users/{user?.uid}/logs'. Verifique security rules.
+                       Firestore: Permissão negada ao acessar coleção 'users/{user?.id}/logs'. Verifique security rules.
                      </div>
                   </div>
                </div>
