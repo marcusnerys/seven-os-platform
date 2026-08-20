@@ -122,15 +122,16 @@ export default function BookingPage() {
 
   useEffect(() => {
     if (userId) {
-      // Try to fetch studio name (público)
-      supabase.from('beautyos_settings').select('studio_name').eq('empresa_id', userId).maybeSingle().then(({ data }) => {
-        if (data?.studio_name) setProfessionalName(data.studio_name);
+      // Try to fetch studio name (público, via RPC escopada a este empresa_id)
+      supabase.rpc('beautyos_public_settings', { p_empresa_id: userId }).then(({ data }) => {
+        const settings = data?.[0];
+        if (settings?.studio_name) setProfessionalName(settings.studio_name);
       });
 
-      // Fetch services from DB (público)
-      supabase.from('beautyos_services').select('*').eq('empresa_id', userId).then(({ data }) => {
+      // Fetch services from DB (público, via RPC escopada a este empresa_id)
+      supabase.rpc('beautyos_public_services', { p_empresa_id: userId }).then(({ data }) => {
         if (data && data.length > 0) {
-          const servicesList = data.map(row => ({ id: row.id, name: row.name, price: Number(row.price) || 0, duration: row.duration }));
+          const servicesList = data.map((row: any) => ({ id: row.id, name: row.name, price: Number(row.price) || 0, duration: row.duration }));
           setServices(prev => [...prev, ...servicesList]);
         }
       });
