@@ -149,14 +149,11 @@ export default function BookingPage() {
   useEffect(() => {
     if (selectedDate && userId) {
       const dateStr = selectedDate.toISOString().split('T')[0];
-      // Fetch occupied slots for selected date (via view pública, sem dados do cliente)
+      // Fetch occupied slots for selected date (via RPC escopada, sem dados do cliente)
       supabase
-        .from('beautyos_public_slots')
-        .select('time')
-        .eq('empresa_id', userId)
-        .eq('date', dateStr)
+        .rpc('beautyos_public_slots', { p_empresa_id: userId, p_date: dateStr })
         .then(({ data }) => {
-          setOccupiedSlots((data ?? []).map(row => row.time));
+          setOccupiedSlots((data ?? []).map((row: any) => row.time));
         });
     }
   }, [selectedDate, userId]);

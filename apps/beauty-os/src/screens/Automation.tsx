@@ -82,7 +82,7 @@ export default function Automation() {
       </header>
 
       <div className="px-6 flex flex-col gap-6 pt-2">
-        {templates.sort((a, b) => {
+        {[...templates].sort((a, b) => {
             const order = ['welcome', 'confirmation', 'reminder', 'post_attendance', 'birthday', 'custom'];
             return order.indexOf(a.type) - order.indexOf(b.type);
         }).map((template) => (
