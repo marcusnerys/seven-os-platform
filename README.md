@@ -43,6 +43,7 @@ flutter run
 - [Setup Completo](docs/SETUP.md) - Guia de instalação e configuração
 - [Arquitetura](docs/ARCHITECTURE.md) - Estrutura do projeto
 - [Instruções Copilot](.github/copilot-instructions.md) - Padrões de código
+- [Servidores MCP](docs/MCP.md) - Perplexity, Playwright, Firecrawl, Chrome DevTools, Glif
 
 ## 🔌 Configurar IA Tools
 
