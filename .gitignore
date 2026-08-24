@@ -35,12 +35,3 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
-
-# Skills de terceiros instaladas localmente (ex.: npx skills add NVIDIA/skills)
-# Ficam disponíveis na máquina, mas fora do repositório: são 55 MB e centenas
-# de skills de infraestrutura que não se aplicam a um app Flutter.
-# As skills do próprio projeto ficam versionadas, listadas abaixo.
-.claude/skills/*
-!.claude/skills/agent-reach/
-!.claude/skills/api-catalog/
-skills-lock.json
