@@ -4,7 +4,7 @@
 
 ---
 
-## 🔥 PROMPT 1: Feature Completa
+## PROMPT 1: Feature Completa
 
 **Onde usar:** Google AI Studio (análise) → Copilot (implementação)
 
@@ -32,7 +32,7 @@ USE sealed classes, null safety e padrão Clean Architecture.
 
 ---
 
-## 🔥 PROMPT 2: BLoC Rápido
+## PROMPT 2: BLoC Rápido
 
 **Onde usar:** GitHub Copilot (`Ctrl+K`)
 
@@ -50,7 +50,7 @@ Use sealed classes e events.
 
 ---
 
-## 🔥 PROMPT 3: Widget com BLoC
+## PROMPT 3: Widget com BLoC
 
 **Onde usar:** Copilot (`Ctrl+K`) em arquivo de widget
 
@@ -69,7 +69,7 @@ Use Material Design 3 e responsividade.
 
 ---
 
-## 🔥 PROMPT 4: Modelo JSON
+## PROMPT 4: Modelo JSON
 
 **Onde usar:** Copilot (`Ctrl+K`) em arquivo model
 
@@ -93,7 +93,7 @@ Inclua:
 
 ---
 
-## 🔥 PROMPT 5: Repository
+## PROMPT 5: Repository
 
 **Donde usar:** Copilot (`Ctrl+K`) em arquivo repository
 
@@ -113,7 +113,7 @@ Adicione try-catch e logging.
 
 ---
 
-## 🔥 PROMPT 6: DataSource Supabase
+## PROMPT 6: DataSource Supabase
 
 **Onde usar:** Copilot (`Ctrl+K`)
 
@@ -133,7 +133,7 @@ Trate erros PostgrestException.
 
 ---
 
-## 🔥 PROMPT 7: Validações
+## PROMPT 7: Validações
 
 **Onde usar:** Copilot (`Ctrl+K`) em widget de form
 
@@ -151,7 +151,7 @@ Use regex quando apropriado.
 
 ---
 
-## 🔥 PROMPT 8: Integração Google AI
+## PROMPT 8: Integração Google AI
 
 **Donde usar:** Google AI Studio (análise)
 
@@ -169,7 +169,7 @@ JSON response com esses campos.
 
 ---
 
-## 🔥 PROMPT 9: Testes Unitários
+## PROMPT 9: Testes Unitários
 
 **Donde usar:** Copilot (`Ctrl+K`) em arquivo test
 
@@ -188,7 +188,7 @@ Use bloc_test e mocktail.
 
 ---
 
-## 🔥 PROMPT 10: Migração Supabase
+## PROMPT 10: Migração Supabase
 
 **Donde usar:** Google AI Studio (planejamento)
 
@@ -212,48 +212,48 @@ Com:
 
 ---
 
-## 📋 FLUXO RECOMENDADO
+## FLUXO RECOMENDADO
 
 ```
 1. Usar PROMPT 10 no Google AI
-   ↓ Gerar schema SQL
+ ↓ Gerar schema SQL
 
-2. Usar PROMPT 8 no Google AI  
-   ↓ Planejar integrações de IA
+2. Usar PROMPT 8 no Google AI
+ ↓ Planejar integrações de IA
 
 3. Usar PROMPT 1 no Google AI
-   ↓ Visão geral de uma feature
+ ↓ Visão geral de uma feature
 
 4. Usar PROMPTS 2-7 no Copilot
-   ↓ Implementar código
+ ↓ Implementar código
 
 5. Usar PROMPT 9 no Copilot
-   ↓ Adicionar testes
+ ↓ Adicionar testes
 
 6. Revisar e testar manualmente
 ```
 
 ---
 
-## 🎯 DICAS DE USO
+## DICAS DE USO
 
 ### Google AI Studio
-- ✅ Use para planejamento e análise
-- ✅ Gere estruturas e schemas
-- ✅ Peça sugestões de arquitetura
-- ❌ Não use para código pequenininho
-- ❌ Não confie 100% em sintaxe
+- Use para planejamento e análise
+- Gere estruturas e schemas
+- Peça sugestões de arquitetura
+- Não use para código pequenininho
+- Não confie 100% em sintaxe
 
 ### GitHub Copilot
-- ✅ Use `Ctrl+K` para completação
-- ✅ Excelente para código boilerplate
-- ✅ Use para padrões repetitivos
-- ✅ Revise sempre antes de aceitar
-- ❌ Não deixe autosave ativo sem revisar
+- Use `Ctrl+K` para completação
+- Excelente para código boilerplate
+- Use para padrões repetitivos
+- Revise sempre antes de aceitar
+- Não deixe autosave ativo sem revisar
 
 ---
 
-## 🚀 TEMPLATE: Criar Sua Feature
+## TEMPLATE: Criar Sua Feature
 
 Copie e customize:
 
@@ -276,7 +276,7 @@ USE Clean Architecture + BLoC.
 
 ---
 
-## 📞 SUPORTE
+## SUPORTE
 
 Se um prompt não funcionar:
 1. Divida em partes menores

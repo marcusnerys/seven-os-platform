@@ -53,9 +53,9 @@ flutter build ios
 ### Google AI Studio
 1. Gerar API Key em [aistudio.google.com](https://aistudio.google.com)
 2. Adicionar ao `.env`:
-   ```
-   GOOGLE_AI_KEY=your_key_here
-   ```
+ ```
+ GOOGLE_AI_KEY=your_key_here
+ ```
 
 ## Troubleshooting
 

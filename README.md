@@ -1,17 +1,17 @@
-# Seven OS Platform 🚀
+# Seven OS Platform
 
 Aplicativo Flutter de ponta para gestão de serviços com integração de IA.
 
-## 🌟 Características
+## Características
 
-- 📱 Interface moderna com Flutter
-- 🤖 Integração com Google AI Studio
-- 💻 GitHub Copilot para desenvolvimento
-- ⚡ Backend em tempo real com Supabase
-- 🔔 Notificações push
-- 📊 Dashboard intuitivo
+- Interface moderna com Flutter
+- Integração com Google AI Studio
+- GitHub Copilot para desenvolvimento
+- Backend em tempo real com Supabase
+- Notificações push
+- Dashboard intuitivo
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 
 - **Frontend**: Flutter 3.0+
 - **Backend**: Supabase
@@ -20,7 +20,7 @@ Aplicativo Flutter de ponta para gestão de serviços com integração de IA.
 - **Autenticação**: Supabase Auth
 - **Database**: PostgreSQL (Supabase)
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Clone
@@ -38,14 +38,14 @@ cp .env.example .env
 flutter run
 ```
 
-## 📚 Documentação
+## Documentação
 
 - [Setup Completo](docs/SETUP.md) - Guia de instalação e configuração
 - [Arquitetura](docs/ARCHITECTURE.md) - Estrutura do projeto
 - [Instruções Copilot](.github/copilot-instructions.md) - Padrões de código
 - [Servidores MCP](docs/MCP.md) - Perplexity, Playwright, Firecrawl, Chrome DevTools, Glif
 
-## 🔌 Configurar IA Tools
+## Configurar IA Tools
 
 ### Google AI Studio
 1. Gerar API Key: https://aistudio.google.com
@@ -56,7 +56,7 @@ flutter run
 2. Fazer login com GitHub
 3. Usar `Ctrl+I` para IA inline ou `Ctrl+K` para chat
 
-## 📁 Estrutura
+## Estrutura
 
 ```
 lib/
@@ -64,26 +64,26 @@ lib/
 ├── app/
 ├── core/
 └── features/
-    ├── agenda/
-    ├── auth/
-    ├── cash/
-    ├── clients/
-    ├── dashboard/
-    ├── shell/
-    └── valet/
+ ├── agenda/
+ ├── auth/
+ ├── cash/
+ ├── clients/
+ ├── dashboard/
+ ├── shell/
+ └── valet/
 ```
 
-## 🤝 Contribuir
+## Contribuir
 
 1. Crie uma branch: `git checkout -b feature/sua-feature`
 2. Commit: `git commit -m 'feat: descrição'`
 3. Push: `git push origin feature/sua-feature`
 4. Abra um Pull Request
 
-## 📝 Licença
+## Licença
 
 MIT - Veja [LICENSE](LICENSE) para detalhes
 
-## 👤 Autor
+## Autor
 
 - **Marcus Nery** - [@marcusnerys](https://github.com/marcusnerys)

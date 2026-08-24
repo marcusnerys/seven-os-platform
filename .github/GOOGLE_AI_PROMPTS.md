@@ -1,12 +1,12 @@
 # Google AI Studio Prompts - Seven OS Platform
 
-## 🎯 Prompts Otimizados para Google Generative AI
+## Prompts Otimizados para Google Generative AI
 
 Use estes prompts em https://aistudio.google.com para análises, planejamento e geração de código complexo.
 
 ---
 
-## 1️⃣ ANÁLISE ARQUITETURAL
+## 1⃣ ANÁLISE ARQUITETURAL
 
 **Objetivo:** Validar estrutura do projeto
 
@@ -15,17 +15,17 @@ Analise a seguinte estrutura de projeto Flutter:
 
 lib/
 ├── features/
-│   ├── auth/
-│   │   ├── bloc/
-│   │   ├── data/
-│   │   ├── domain/
-│   │   └── presentation/
-│   ├── dashboard/
-│   └── clients/
+│ ├── auth/
+│ │ ├── bloc/
+│ │ ├── data/
+│ │ ├── domain/
+│ │ └── presentation/
+│ ├── dashboard/
+│ └── clients/
 ├── core/
-│   ├── config/
-│   ├── theme/
-│   └── api/
+│ ├── config/
+│ ├── theme/
+│ └── api/
 
 Isso segue Clean Architecture corretamente?
 Quais melhorias você sugeriria?
@@ -34,7 +34,7 @@ Há problemas de acoplamento?
 
 ---
 
-## 2️⃣ DESIGN DE SCHEMA
+## 2⃣ DESIGN DE SCHEMA
 
 **Objetivo:** Planejar estrutura de banco de dados
 
@@ -61,7 +61,7 @@ Forneça o SQL completo.
 
 ---
 
-## 3️⃣ MIGRAÇÃO DE DADOS
+## 3⃣ MIGRAÇÃO DE DADOS
 
 **Objetivo:** Planejar migração de sistema legado
 
@@ -88,7 +88,7 @@ Crie um plano passo-a-passo incluindo:
 
 ---
 
-## 4️⃣ OTIMIZAÇÃO DE PERFORMANCE
+## 4⃣ OTIMIZAÇÃO DE PERFORMANCE
 
 **Objetivo:** Analisar e melhorar performance
 
@@ -113,7 +113,7 @@ Sugira:
 
 ---
 
-## 5️⃣ PADRÃO DE ERRO
+## 5⃣ PADRÃO DE ERRO
 
 **Objetivo:** Estruturar tratamento de erros
 
@@ -139,7 +139,7 @@ Código Dart completo.
 
 ---
 
-## 6️⃣ INTEGRAÇÃO IA
+## 6⃣ INTEGRAÇÃO IA
 
 **Objetivo:** Planejar uso de IA no app
 
@@ -163,7 +163,7 @@ Para cada caso, forneça:
 
 ---
 
-## 7️⃣ SEGURANÇA
+## 7⃣ SEGURANÇA
 
 **Objetivo:** Auditar segurança
 
@@ -193,7 +193,7 @@ Forneça:
 
 ---
 
-## 8️⃣ TESTES
+## 8⃣ TESTES
 
 **Objetivo:** Estratégia de testes
 
@@ -217,7 +217,7 @@ Forneça:
 
 ---
 
-## 9️⃣ DOCUMENTAÇÃO API
+## 9⃣ DOCUMENTAÇÃO API
 
 **Objetivo:** Gerar documentação
 
@@ -243,7 +243,7 @@ Forneça YAML completo.
 
 ---
 
-## 🔟 PERFORMANCE BENCHMARK
+## PERFORMANCE BENCHMARK
 
 **Objetivo:** Planejar performance
 
@@ -267,7 +267,7 @@ Crie:
 
 ---
 
-## 1️⃣1️⃣ CODE REVIEW
+## 1⃣1⃣ CODE REVIEW
 
 **Objetivo:** Revisar código
 
@@ -293,7 +293,7 @@ Retorne:
 
 ---
 
-## 1️⃣2️⃣ ARQUITETURA NOVO PROJETO
+## 1⃣2⃣ ARQUITETURA NOVO PROJETO
 
 **Objetivo:** Estruturar novo projeto
 
@@ -327,7 +327,7 @@ Recomende:
 
 ---
 
-## 1️⃣3️⃣ REFATORAÇÃO
+## 1⃣3⃣ REFATORAÇÃO
 
 **Objetivo:** Refatorar código legado
 
@@ -354,7 +354,7 @@ Crie:
 
 ---
 
-## 1️⃣4️⃣ FEATURE BRAINSTORM
+## 1⃣4⃣ FEATURE BRAINSTORM
 
 **Objetivo:** Gerar ideias de features
 
@@ -381,7 +381,7 @@ Para top 3 features, detalhe:
 
 ---
 
-## 1️⃣5️⃣ TROUBLESHOOTING
+## 1⃣5⃣ TROUBLESHOOTING
 
 **Objetivo:** Resolver problemas
 
@@ -404,7 +404,7 @@ Analyze:
 
 ---
 
-## 📋 WORKFLOW COM GOOGLE AI
+## WORKFLOW COM GOOGLE AI
 
 ```
 1. Use Prompt #2 para desenhar schema
@@ -419,7 +419,7 @@ Analyze:
 
 ---
 
-## 🎨 TEMPLATE CUSTOMIZE
+## TEMPLATE CUSTOMIZE
 
 ```
 [Selecione um prompt acima]
@@ -431,15 +431,15 @@ Analyze:
 
 ---
 
-## 💡 DICAS
+## DICAS
 
-✅ **DO:**
+ **DO:**
 - Seja específico nos prompts
 - Forneça contexto completo
 - Peça por exemplos
 - Valide o output
 
-❌ **DON'T:**
+ **DON'T:**
 - Prompts genéricos
 - Sem contexto
 - Não revisar output
@@ -447,7 +447,7 @@ Analyze:
 
 ---
 
-## 📞 RECURSOS
+## RECURSOS
 
 - [Google AI Docs](https://ai.google.dev)
 - [Gemini API Guide](https://ai.google.dev/tutorials)

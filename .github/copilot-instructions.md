@@ -13,9 +13,9 @@ Você é um assistente especializado no projeto Seven OS Platform, um aplicativo
 
 ```
 lib/
-├── core/           # Lógica compartilhada
-├── features/       # Funcionalidades isoladas
-└── app/            # Configuração global
+├── core/ # Lógica compartilhada
+├── features/ # Funcionalidades isoladas
+└── app/ # Configuração global
 ```
 
 ## Convenções de Código
@@ -29,33 +29,33 @@ lib/
 ### Padrões
 
 1. **Estados**:
-   ```dart
-   sealed class [Feature]State {}
-   class [Feature]Initial extends [Feature]State {}
-   class [Feature]Loading extends [Feature]State {}
-   class [Feature]Success extends [Feature]State {}
-   class [Feature]Error extends [Feature]State {}
-   ```
+ ```dart
+ sealed class [Feature]State {}
+ class [Feature]Initial extends [Feature]State {}
+ class [Feature]Loading extends [Feature]State {}
+ class [Feature]Success extends [Feature]State {}
+ class [Feature]Error extends [Feature]State {}
+ ```
 
 2. **Eventos**:
-   ```dart
-   sealed class [Feature]Event {}
-   class [Feature]Started extends [Feature]Event {}
-   ```
+ ```dart
+ sealed class [Feature]Event {}
+ class [Feature]Started extends [Feature]Event {}
+ ```
 
 3. **BLoCs**:
-   - Use `sealed class` para estados e eventos
-   - Implemente tratamento de erros
-   - Use pattern matching
+ - Use `sealed class` para estados e eventos
+ - Implemente tratamento de erros
+ - Use pattern matching
 
 ## Ao Gerar Código
 
-- ✅ Siga Clean Architecture
-- ✅ Use BLoC para gerenciamento de estado
-- ✅ Adicione tratamento de erros
-- ✅ Implemente tipos seguros (sealed classes)
-- ✅ Testes unitários quando aplicável
-- ✅ Comente código complexo
+- Siga Clean Architecture
+- Use BLoC para gerenciamento de estado
+- Adicione tratamento de erros
+- Implemente tipos seguros (sealed classes)
+- Testes unitários quando aplicável
+- Comente código complexo
 
 ## Quando Codificar
 

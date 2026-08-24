@@ -1,18 +1,18 @@
 # Security & Best Practices
 
-## 🔒 Segurança com AI Tools
+## Segurança com AI Tools
 
 ### Credenciais
 
 **NUNCA faça isso:**
 ```dart
-// ❌ ERRADO - Hardcoded
+// ERRADO - Hardcoded
 const apiKey = "AIzaSyD...";
 ```
 
 **SEMPRE faça isso:**
 ```dart
-// ✅ CORRETO - Via .env
+// CORRETO - Via .env
 final apiKey = dotenv.env['GOOGLE_AI_KEY'];
 ```
 
@@ -38,30 +38,30 @@ SUPABASE_KEY=your_anon_key
 
 ---
 
-## ✅ Boas Práticas com IA
+## Boas Práticas com IA
 
 ### 1. Compartimentalizar Dados
 
 Nunca passe dados completos para prompts:
 
 ```dart
-// ❌ ERRADO
+// ERRADO
 final prompt = "Analise este usuário: $userData";
 
-// ✅ CORRETO
+// CORRETO
 final prompt = "Gere uma saudação para um usuário";
 ```
 
 ### 2. Validar Saída de IA
 
 ```dart
-// ✅ CORRETO
+// CORRETO
 final response = await aiService.generateContent(prompt);
 if (response.isEmpty) {
-  return defaultValue;
+ return defaultValue;
 }
 if (!isValidResponse(response)) {
-  return defaultValue;
+ return defaultValue;
 }
 return response;
 ```
@@ -69,16 +69,16 @@ return response;
 ### 3. Logs Seguros
 
 ```dart
-// ❌ ERRADO - Pode logar credenciais
+// ERRADO - Pode logar credenciais
 print("Response: $response");
 
-// ✅ CORRETO - Sanitizado
+// CORRETO - Sanitizado
 logger.info("AI Response received (length: ${response.length})");
 ```
 
 ---
 
-## 🔐 GitHub Configuration
+## GitHub Configuration
 
 ### Personal Access Token
 
@@ -94,39 +94,39 @@ rm .env
 
 # Se já foi comittado (acidental):
 git filter-branch --force --index-filter \
-  "git rm -rf --cached --ignore-unmatch .env" \
-  --prune-empty --tag-name-filter cat -- --all
+ "git rm -rf --cached --ignore-unmatch .env" \
+ --prune-empty --tag-name-filter cat -- --all
 ```
 
 ---
 
-## 📋 Checklist de Segurança
+## Checklist de Segurança
 
 ```
-☐ .env está em .gitignore
-☐ Nenhuma credencial em arquivos de código
-☐ API Keys regeneradas após exposição
-☐ .env.example não contém valores reais
-☐ Logs não expõem dados sensíveis
-☐ Validação de entrada antes de prompts IA
-☐ Rate limiting em chamadas à API
-☐ CORS configurado corretamente no backend
+ .env está em .gitignore
+ Nenhuma credencial em arquivos de código
+ API Keys regeneradas após exposição
+ .env.example não contém valores reais
+ Logs não expõem dados sensíveis
+ Validação de entrada antes de prompts IA
+ Rate limiting em chamadas à API
+ CORS configurado corretamente no backend
 ```
 
 ---
 
-## 🚨 Responder a Incidentes
+## Responder a Incidentes
 
 ### Se Expuseste uma Credencial
 
 1. **Regenerar imediatamente** na console do serviço
 2. **Remover do git history**:
-   ```bash
-   git filter-branch --force --index-filter \
-     "git rm -rf --cached --ignore-unmatch .env" \
-     --prune-empty -- --all
-   git push origin --force --all
-   ```
+ ```bash
+ git filter-branch --force --index-filter \
+ "git rm -rf --cached --ignore-unmatch .env" \
+ --prune-empty -- --all
+ git push origin --force --all
+ ```
 3. **Notificar equipe**
 4. **Auditar logs** para uso não autorizado
 
@@ -139,7 +139,7 @@ git filter-branch --force --index-filter \
 
 ---
 
-## 📞 Recursos de Segurança
+## Recursos de Segurança
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [Flutter Security](https://flutter.dev/docs/release/breaking-changes/content-provider-security)

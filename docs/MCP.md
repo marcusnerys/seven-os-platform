@@ -1,20 +1,18 @@
 # Servidores MCP do projeto
 
 Configurados em [`.mcp.json`](../.mcp.json), na raiz. Ao abrir o projeto com
-`claude`, o Claude Code pede aprovação uma vez por servidor — servidor de
+`claude`, o Claude Code pede aprovação uma vez por servidor, servidor de
 projeto não sobe sozinho, por segurança.
 
 ## Os cinco
 
 | Servidor | Para que serve | Precisa de chave |
 |---|---|---|
-| `perplexity` | Busca na web ao vivo, com raciocínio e pesquisa | ✅ `PERPLEXITY_API_KEY` |
-| `playwright` | Controla um navegador real: clica, preenche, testa o app como um QA | ❌ |
-| `firecrawl` | Varre sites inteiros e traz o conteúdo já limpo | ✅ `FIRECRAWL_API_KEY` |
-| `chrome-devtools` | Lê a página aberta no seu Chrome: console, rede, estilos computados | ❌ |
-| `glif` | Centenas de modelos de imagem, vídeo e áudio | Conta em glif.app |
-
-## Chaves
+| `perplexity` | Busca na web ao vivo, com raciocínio e pesquisa | `PERPLEXITY_API_KEY` |
+| `playwright` | Controla um navegador real: clica, preenche, testa o app como um QA | |
+| `firecrawl` | Varre sites inteiros e traz o conteúdo já limpo | `FIRECRAWL_API_KEY` |
+| `chrome-devtools` | Lê a página aberta no seu Chrome: console, rede, estilos computados | |
+| `glif` | Centenas de modelos de imagem, vídeo e áudio | Conta em glif.app | ## Chaves
 
 Nenhuma chave fica no repositório. O `.mcp.json` referencia variáveis de
 ambiente com `${VAR}`; quem resolve é o seu shell.
@@ -32,7 +30,7 @@ export FIRECRAWL_API_KEY="fc-..."
 ## Onde cada um roda
 
 `playwright` e `chrome-devtools` **precisam da sua máquina**. O primeiro baixa
-o próprio navegador; o segundo se conecta a um Chrome de verdade — a graça dele
+o próprio navegador; o segundo se conecta a um Chrome de verdade, a graça dele
 é ler a aba que *você* tem aberta, com sua sessão e seu login. Em sessão remota
 do Claude Code na web isso não existe.
 
@@ -53,7 +51,7 @@ para ela:
 google-chrome --remote-debugging-port=9222
 
 # 2. no .mcp.json, troque os args do chrome-devtools por:
-#    ["-y", "chrome-devtools-mcp@latest", "--browser-url=http://127.0.0.1:9222"]
+# ["-y", "chrome-devtools-mcp@latest", "--browser-url=http://127.0.0.1:9222"]
 ```
 
 ## Sobreposições que valem saber
@@ -69,6 +67,6 @@ canal web do agent-reach passa pelo Jina Reader e devolve markdown cru. O
 agent-reach continua valendo pelas redes sociais, que o Firecrawl não cobre.
 
 **Playwright e Chrome DevTools não competem.** O Playwright *dirige* o
-navegador — clica, preenche, navega um fluxo. O Chrome DevTools *observa* uma
-página que já está rodando — console, rede, estilos. Usados juntos: o
+navegador, clica, preenche, navega um fluxo. O Chrome DevTools *observa* uma
+página que já está rodando, console, rede, estilos. Usados juntos: o
 Playwright chega na tela que interessa, o DevTools inspeciona.
