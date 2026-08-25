@@ -80,3 +80,14 @@ A lista diz o que evitar, nao o que fazer. Diante de uma escolha nao listada,
 o criterio e: a decisao vem do produto, ou vem do default da ferramenta? Se
 vem do default, refaca. Cor, espacamento e tipografia do Seven OS precisam ter
 motivo ligado a gestao de servicos, nao a moda de landing page.
+
+## Protocolo de sessao
+
+Ao iniciar qualquer sessao neste projeto, usar /start para carregar o contexto
+minimo da memoria persistente (Obsidian). Nao reconstruir historico de sessoes
+anteriores.
+
+Memoria persistente: ~/LESHANOT MIND/PROJETOS/SEVEN-OS/
+Ponto de entrada: 00_CONTEXTO_ATUAL.md
+
+Comandos disponiveis: /start /resume /save /status /context /memory /decision /task
