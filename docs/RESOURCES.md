@@ -1,6 +1,6 @@
 # Recursos & Documentação
 
-## 📚 Documentação Oficial
+## Documentação Oficial
 
 ### Flutter & Dart
 - [Flutter Docs](https://flutter.dev/docs)
@@ -25,7 +25,7 @@
 
 ---
 
-## 🔗 Links Rápidos
+## Links Rápidos
 
 | Recurso | Link |
 |---------|------|
@@ -33,11 +33,9 @@
 | Google AI Studio | https://aistudio.google.com |
 | Supabase Console | https://app.supabase.com |
 | GitHub Codespace | https://github.com/codespaces |
-| VS Code Download | https://code.visualstudio.com |
+| VS Code Download | https://code.visualstudio.com | ---
 
----
-
-## 📖 Guias Neste Projeto
+## Guias Neste Projeto
 
 - [Setup Inicial](./SETUP.md) - Como configurar e executar
 - [Arquitetura](./ARCHITECTURE.md) - Estrutura do projeto
@@ -47,7 +45,7 @@
 
 ---
 
-## 🎓 Tutoriais Recomendados
+## Tutoriais Recomendados
 
 ### Para Iniciantes
 1. [Flutter For Beginners](https://www.youtube.com/watch?v=1ukSR1GDMsU&list=PL4cUxeGkcC9jLYyp2Wr2t6ypy3tX5S9T5)
@@ -66,7 +64,7 @@
 
 ---
 
-## 🛠️ Ferramentas Úteis
+## Ferramentas Úteis
 
 ### CLI Tools
 ```bash
@@ -97,7 +95,7 @@ dart format .
 
 ---
 
-## 🤝 Comunidades
+## Comunidades
 
 - [Flutter Community](https://flutter.dev/community)
 - [Reddit r/Flutter](https://reddit.com/r/Flutter)
@@ -106,7 +104,7 @@ dart format .
 
 ---
 
-## 📝 Exemplos de Código
+## Exemplos de Código
 
 Veja a pasta [exemplos](./examples/) para:
 - Implementação de BLoC
@@ -116,7 +114,7 @@ Veja a pasta [exemplos](./examples/) para:
 
 ---
 
-## ⚠️ Troubleshooting
+## Troubleshooting
 
 ### Problema: Copilot não funciona
 **Solução:**
@@ -138,8 +136,8 @@ Veja a pasta [exemplos](./examples/) para:
 
 ---
 
-## 📞 Suporte
+## Suporte
 
-- 📧 Email: [seu-email]
-- 🐛 Issues: [GitHub Issues](https://github.com/marcusnerys/seven-os-platform/issues)
-- 💬 Discussões: [GitHub Discussions](https://github.com/marcusnerys/seven-os-platform/discussions)
+- Email: [seu-email]
+- Issues: [GitHub Issues](https://github.com/marcusnerys/seven-os-platform/issues)
+- Discussões: [GitHub Discussions](https://github.com/marcusnerys/seven-os-platform/discussions)

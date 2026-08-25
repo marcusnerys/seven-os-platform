@@ -1,24 +1,24 @@
 # Guia de Uso: Google AI Studio + GitHub Copilot + Codex
 
-## 🎯 Fluxo de Desenvolvimento com IA
+## Fluxo de Desenvolvimento com IA
 
 ### 1. Planejar com AI Studio
 
 1. Abra https://aistudio.google.com
 2. Descreva a funcionalidade:
-   ```
-   Crie um modelo de dados para a feature de Agendamento
-   com campos: id, client_id, service_id, date, time, status
-   ```
+ ```
+ Crie um modelo de dados para a feature de Agendamento
+ com campos: id, client_id, service_id, date, time, status
+ ```
 3. Gere a estrutura e copie para seu projeto
 
 ### 2. Implementar com Copilot
 
 1. Abra o arquivo no VS Code
 2. Use `Ctrl+K` para gerar código:
-   ```
-   Crie um BLoC para a agenda com estados Loading, Success, Error
-   ```
+ ```
+ Crie um BLoC para a agenda com estados Loading, Success, Error
+ ```
 3. Refine e customize conforme necessário
 
 ### 3. Validar com Codex
@@ -29,7 +29,7 @@
 
 ---
 
-## 💡 Casos de Uso
+## Casos de Uso
 
 ### Caso 1: Criar novo Feature
 
@@ -79,38 +79,38 @@ Refatore o código seguindo as sugestões
 
 ---
 
-## 🔑 Prompts Efetivos
+## Prompts Efetivos
 
 ### Para AI Studio
 
-✅ **Bom:**
+ **Bom:**
 ```
 Crie um modelo Dart para representar um cliente com campos:
 - id, name, email, phone, address
 Use getters e factory constructors
 ```
 
-❌ **Ruim:**
+ **Ruim:**
 ```
 Make a model
 ```
 
 ### Para Copilot
 
-✅ **Bom:**
+ **Bom:**
 ```
-Adicione tratamento de erro no BLoC para quando 
+Adicione tratamento de erro no BLoC para quando
 a chamada à API falhar
 ```
 
-❌ **Ruim:**
+ **Ruim:**
 ```
 Fix error handling
 ```
 
 ---
 
-## 📊 Workflow Recomendado
+## Workflow Recomendado
 
 ```
 1. Definir requisitos (AI Studio)
@@ -123,7 +123,7 @@ Fix error handling
 
 ---
 
-## ⚡ Atalhos Úteis
+## Atalhos Úteis
 
 | Atalho | Ação | Ferramenta |
 |--------|------|-----------|
@@ -132,30 +132,28 @@ Fix error handling
 | `Ctrl+/` | Comentar | VS Code |
 | `F1` + "Refactor" | Refatoração | Copilot |
 | `Tab` | Aceitar sugestão | Copilot |
-| `Esc` | Rejeitar sugestão | Copilot |
+| `Esc` | Rejeitar sugestão | Copilot | ---
 
----
+## Limitações e Cuidados
 
-## 🚫 Limitações e Cuidados
-
-⚠️ **Nem sempre a IA está correta:**
+ **Nem sempre a IA está correta:**
 - Sempre revise o código gerado
 - Teste antes de usar em produção
 - Verifique a lógica
 
-⚠️ **Segurança:**
+ **Segurança:**
 - Não exponha dados sensíveis aos prompts
 - Não copie credenciais para IA
 - Use variáveis de ambiente
 
-⚠️ **Performance:**
+ **Performance:**
 - Não gere arquivos muito grandes de uma vez
 - Divida em partes menores
 - Teste incrementalmente
 
 ---
 
-## 📚 Recursos
+## Recursos
 
 - [Google AI Studio Docs](https://ai.google.dev)
 - [GitHub Copilot Tips](https://github.blog/2023-06-20-how-to-write-better-prompts-for-github-copilot/)

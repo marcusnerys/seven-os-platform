@@ -1,12 +1,12 @@
 # AI Tool Prompts - Seven OS Platform
 
-## 🎯 Sistema de Prompts para IA
+## Sistema de Prompts para IA
 
 Use estes prompts nas suas ferramentas de IA para gerar código consistente com a arquitetura do projeto.
 
 ---
 
-## 1️⃣ PROMPT MASTER (Geral)
+## 1⃣ PROMPT MASTER (Geral)
 
 ```
 Você é um assistente especializado em Flutter e Clean Architecture.
@@ -31,21 +31,21 @@ ESTRUTURA DE ARQUIVOS:
 ```
 lib/features/[feature]/
 ├── bloc/
-│   ├── [feature]_bloc.dart
-│   ├── [feature]_event.dart
-│   └── [feature]_state.dart
+│ ├── [feature]_bloc.dart
+│ ├── [feature]_event.dart
+│ └── [feature]_state.dart
 ├── data/
-│   ├── datasources/
-│   ├── models/
-│   └── repositories/
+│ ├── datasources/
+│ ├── models/
+│ └── repositories/
 ├── domain/
-│   ├── entities/
-│   ├── repositories/
-│   └── usecases/
+│ ├── entities/
+│ ├── repositories/
+│ └── usecases/
 └── presentation/
-    ├── pages/
-    ├── widgets/
-    └── providers/
+ ├── pages/
+ ├── widgets/
+ └── providers/
 ```
 
 QUANDO GERAR CÓDIGO:
@@ -61,7 +61,7 @@ Substitua pelo nome da funcionalidade em snake_case
 
 ---
 
-## 2️⃣ PROMPT PARA CRIAR FEATURE
+## 2⃣ PROMPT PARA CRIAR FEATURE
 
 ```
 Crie uma nova feature chamada [FEATURE] para o Seven OS Platform.
@@ -91,7 +91,7 @@ EXEMPLO DE ESTRUTURA:
 
 ---
 
-## 3️⃣ PROMPT PARA CRIAR PÁGINA UI
+## 3⃣ PROMPT PARA CRIAR PÁGINA UI
 
 ```
 Crie uma página Flutter chamada [PAGE] para [FEATURE].
@@ -120,7 +120,7 @@ COMPONENTES:
 
 ---
 
-## 4️⃣ PROMPT PARA BLoC
+## 4⃣ PROMPT PARA BLoC
 
 ```
 Crie um BLoC para [FEATURE] com as seguintes ações:
@@ -146,7 +146,7 @@ IMPLEMENTAR:
 
 ---
 
-## 5️⃣ PROMPT PARA MODELO
+## 5⃣ PROMPT PARA MODELO
 
 ```
 Crie um modelo Dart para [ENTIDADE] com as seguintes propriedades:
@@ -168,7 +168,7 @@ GERAR:
 
 ---
 
-## 6️⃣ PROMPT PARA TESTE
+## 6⃣ PROMPT PARA TESTE
 
 ```
 Crie testes unitários para [COMPONENTE] em [ARQUIVO].
@@ -193,7 +193,7 @@ COBERTURA:
 
 ---
 
-## 7️⃣ PROMPT PARA INTEGRAÇÃO SUPABASE
+## 7⃣ PROMPT PARA INTEGRAÇÃO SUPABASE
 
 ```
 Configure a integração Supabase para [FEATURE].
@@ -215,7 +215,7 @@ GERAR:
 
 ---
 
-## 8️⃣ PROMPT PARA GOOGLE AI INTEGRATION
+## 8⃣ PROMPT PARA GOOGLE AI INTEGRATION
 
 ```
 Integrate Google Generative AI para [FEATURE].
@@ -238,29 +238,29 @@ GERAR:
 
 ---
 
-## 📋 CHECKLIST DE QUALIDADE
+## CHECKLIST DE QUALIDADE
 
 Antes de usar código gerado, verifique:
 
 ```
-☐ Sealed classes usadas para States/Events
-☐ Null safety completo (sem dynamic)
-☐ Tratamento de erros em todos os catch
-☐ Logs apropriados para debug
-☐ Validação de entrada
-☐ Nomes de arquivo corretos
-☐ Sem hardcoding de valores
-☐ Documentação em código complexo
-☐ Testes unitários inclusos
-☐ Padrão Clean Architecture seguido
+ Sealed classes usadas para States/Events
+ Null safety completo (sem dynamic)
+ Tratamento de erros em todos os catch
+ Logs apropriados para debug
+ Validação de entrada
+ Nomes de arquivo corretos
+ Sem hardcoding de valores
+ Documentação em código complexo
+ Testes unitários inclusos
+ Padrão Clean Architecture seguido
 ```
 
 ---
 
-## 🎨 PADRÃO DE CÓDIGO ESPERADO
+## PADRÃO DE CÓDIGO ESPERADO
 
 ```dart
-// ✅ BOM
+// BOM
 sealed class AuthState {}
 
 class AuthInitial extends AuthState {}
@@ -268,34 +268,34 @@ class AuthInitial extends AuthState {}
 class AuthLoading extends AuthState {}
 
 class AuthSuccess extends AuthState {
-  final User user;
-  AuthSuccess(this.user);
+ final User user;
+ AuthSuccess(this.user);
 }
 
 class AuthError extends AuthState {
-  final String message;
-  AuthError(this.message);
+ final String message;
+ AuthError(this.message);
 }
 
 // Estados com Equatable para comparação
 sealed class AuthEvent extends Equatable {
-  const AuthEvent();
-  @override
-  List<Object?> get props => [];
+ const AuthEvent();
+ @override
+ List<Object?> get props => [];
 }
 
 class AuthLoginRequested extends AuthEvent {
-  final String email;
-  final String password;
-  const AuthLoginRequested(this.email, this.password);
-  @override
-  List<Object?> get props => [email, password];
+ final String email;
+ final String password;
+ const AuthLoginRequested(this.email, this.password);
+ @override
+ List<Object?> get props => [email, password];
 }
 ```
 
 ---
 
-## 🚀 COMO USAR
+## COMO USAR
 
 ### No Google AI Studio:
 1. Copie o prompt principal
@@ -305,14 +305,14 @@ class AuthLoginRequested extends AuthEvent {
 
 ### No GitHub Copilot:
 1. Abra um arquivo
-2. Use `Ctrl+K` 
+2. Use `Ctrl+K`
 3. Cole o prompt relevan
 4. Deixe o Copilot completar
 5. Revise e aceite com `Tab`
 
 ---
 
-## 💡 EXEMPLOS REAIS
+## EXEMPLOS REAIS
 
 ### Criar Feature "Valet"
 
@@ -323,10 +323,10 @@ REQUISITOS:
 - Nome: valet
 - Descrição: Gerenciamento de serviço de estacionamento
 - Entidades: Valet, ValetRequest, ValetPrice
-- Endpoints: 
-  • GET /valets - Listar valets disponíveis
-  • POST /valet-requests - Criar solicitação
-  • GET /valet-requests/{id} - Obter detalhes
+- Endpoints:
+ • GET /valets - Listar valets disponíveis
+ • POST /valet-requests - Criar solicitação
+ • GET /valet-requests/{id} - Obter detalhes
 
 GERAR:
 1. BLoC com eventos e estados
@@ -337,7 +337,7 @@ GERAR:
 
 ---
 
-## 📞 QUANDO USAR QUAL PROMPT
+## QUANDO USAR QUAL PROMPT
 
 | Tarefa | Prompt |
 |--------|--------|

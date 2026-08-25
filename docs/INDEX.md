@@ -1,33 +1,33 @@
-# 📖 Documentação - Seven OS Platform
+# Documentação - Seven OS Platform
 
 Bem-vindo à documentação do Seven OS Platform! Use este índice para navegar pelos guias.
 
-## 🚀 Comece por Aqui
+## Comece por Aqui
 
 1. **[SETUP.md](./SETUP.md)** - Configure o projeto localmente (10 min)
 2. **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Entenda a estrutura (5 min)
 3. **[DEV_TOOLS.md](./DEV_TOOLS.md)** - Configure ferramentas (10 min)
 
-## 📚 Guias Completos
+## Guias Completos
 
 ### Desenvolvimento
-- 📋 **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Estrutura do projeto
-- 🛠️ **[DEV_TOOLS.md](./DEV_TOOLS.md)** - Ferramentas de desenvolvimento
-- ✅ **[AI_WORKFLOW.md](./AI_WORKFLOW.md)** - Workflow com AI tools
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Estrutura do projeto
+- **[DEV_TOOLS.md](./DEV_TOOLS.md)** - Ferramentas de desenvolvimento
+- **[AI_WORKFLOW.md](./AI_WORKFLOW.md)** - Workflow com AI tools
 
 ### AI & Integração
-- 🤖 **[AI_TOOLS.md](./AI_TOOLS.md)** - Google AI Studio + Copilot
-- 💡 **[AI_WORKFLOW.md](./AI_WORKFLOW.md)** - Melhores práticas de uso
+- **[AI_TOOLS.md](./AI_TOOLS.md)** - Google AI Studio + Copilot
+- **[AI_WORKFLOW.md](./AI_WORKFLOW.md)** - Melhores práticas de uso
 - � **[AI_PROMPTS.md](./AI_PROMPTS.md)** - Prompts para IA tools
-- �🔑 **[SECURITY.md](./SECURITY.md)** - Segurança de credenciais
+- � **[SECURITY.md](./SECURITY.md)** - Segurança de credenciais
 
 ### Referência
-- 📚 **[RESOURCES.md](./RESOURCES.md)** - Links e referências
-- 🔒 **[SECURITY.md](./SECURITY.md)** - Boas práticas de segurança
+- **[RESOURCES.md](./RESOURCES.md)** - Links e referências
+- **[SECURITY.md](./SECURITY.md)** - Boas práticas de segurança
 
 ---
 
-## 🎯 Por Tarefa
+## Por Tarefa
 
 ### Quero...
 
@@ -48,37 +48,35 @@ Bem-vindo à documentação do Seven OS Platform! Use este índice para navegar 
 
 ---
 
-## 🗂️ Estrutura de Arquivos
+## Estrutura de Arquivos
 
 ```
 docs/
-├── INDEX.md              ← Você está aqui
-├── SETUP.md             # Como configurar
-├── ARCHITECTURE.md      # Estrutura do projeto
-├── DEV_TOOLS.md         # Ferramentas de dev
-├── AI_TOOLS.md          # Integração com IA
-├── AI_WORKFLOW.md       # Workflows com IA
-├── SECURITY.md          # Segurança
-├── RESOURCES.md         # Links e referências
-└── examples/            # Exemplos de código
+├── INDEX.md ← Você está aqui
+├── SETUP.md # Como configurar
+├── ARCHITECTURE.md # Estrutura do projeto
+├── DEV_TOOLS.md # Ferramentas de dev
+├── AI_TOOLS.md # Integração com IA
+├── AI_WORKFLOW.md # Workflows com IA
+├── SECURITY.md # Segurança
+├── RESOURCES.md # Links e referências
+└── examples/ # Exemplos de código
 ```
 
 ---
 
-## ⚡ Quick Links
+## Quick Links
 
 | Ação | Link |
 |------|------|
-| 🚀 Start | [SETUP.md](./SETUP.md) |
-| 🏗️ Arquitetura | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| 🤖 Google AI | [AI_TOOLS.md](./AI_TOOLS.md) |
-| 💬 Copilot | [DEV_TOOLS.md](./DEV_TOOLS.md) |
-| 🔒 Segurança | [SECURITY.md](./SECURITY.md) |
-| 📚 Recursos | [RESOURCES.md](./RESOURCES.md) |
+| Start | [SETUP.md](./SETUP.md) |
+| Arquitetura | [ARCHITECTURE.md](./ARCHITECTURE.md) |
+| Google AI | [AI_TOOLS.md](./AI_TOOLS.md) |
+| Copilot | [DEV_TOOLS.md](./DEV_TOOLS.md) |
+| Segurança | [SECURITY.md](./SECURITY.md) |
+| Recursos | [RESOURCES.md](./RESOURCES.md) | ---
 
----
-
-## 🆘 Precisa de Ajuda?
+## Precisa de Ajuda?
 
 1. **Procure nos guias acima** - Maioria das respostas está lá
 2. **Veja [RESOURCES.md](./RESOURCES.md)** - Links para documentação oficial
@@ -86,7 +84,7 @@ docs/
 
 ---
 
-## 📝 Notas
+## Notas
 
 - Documentação atualizada para **Flutter 3.0+**
 - Inclui setup para **Google AI Studio** e **GitHub Copilot**

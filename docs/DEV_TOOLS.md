@@ -6,15 +6,15 @@
 
 ```json
 {
-  "recommendations": [
-    "dart-code.dart-code",
-    "dart-code.flutter",
-    "GitHub.copilot",
-    "GitHub.copilot-chat",
-    "ms-vscode.makefile-tools",
-    "Equim.equation",
-    "dart-code.dart-code-test-adapter"
-  ]
+ "recommendations": [
+ "dart-code.dart-code",
+ "dart-code.flutter",
+ "GitHub.copilot",
+ "GitHub.copilot-chat",
+ "ms-vscode.makefile-tools",
+ "Equim.equation",
+ "dart-code.dart-code-test-adapter"
+ ]
 }
 ```
 
@@ -29,16 +29,16 @@ code --install-extension GitHub.copilot
 
 ```json
 {
-  "dart.flutterSdkPath": "/usr/local/flutter",
-  "dart.lineLength": 100,
-  "dart.sdkPath": "/usr/local/flutter/bin/dart",
-  "[dart]": {
-    "editor.defaultFormatter": "dart-code.dart-code",
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.fixAll": true
-    }
-  }
+ "dart.flutterSdkPath": "/usr/local/flutter",
+ "dart.lineLength": 100,
+ "dart.sdkPath": "/usr/local/flutter/bin/dart",
+ "[dart]": {
+ "editor.defaultFormatter": "dart-code.dart-code",
+ "editor.formatOnSave": true,
+ "editor.codeActionsOnSave": {
+ "source.fixAll": true
+ }
+ }
 }
 ```
 
@@ -59,7 +59,7 @@ export PATH="$PATH:~/flutter/bin"
 
 ```bash
 flutter doctor
-flutter doctor -v  # Verbose
+flutter doctor -v # Verbose
 ```
 
 ### 3. Configurar Emulador
@@ -105,22 +105,22 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AIService {
-  late GenerativeModel _model;
-  
-  AIService() {
-    final apiKey = dotenv.env['GOOGLE_AI_KEY']!;
-    _model = GenerativeModel(
-      model: 'gemini-pro',
-      apiKey: apiKey,
-    );
-  }
-  
-  Future<String> generateContent(String prompt) async {
-    final response = await _model.generateContent([
-      Content.text(prompt),
-    ]);
-    return response.text ?? '';
-  }
+ late GenerativeModel _model;
+
+ AIService() {
+ final apiKey = dotenv.env['GOOGLE_AI_KEY']!;
+ _model = GenerativeModel(
+ model: 'gemini-pro',
+ apiKey: apiKey,
+ );
+ }
+
+ Future<String> generateContent(String prompt) async {
+ final response = await _model.generateContent([
+ Content.text(prompt),
+ ]);
+ return response.text ?? '';
+ }
 }
 ```
 
@@ -135,14 +135,14 @@ name: Tests
 on: [push, pull_request]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.x'
-      - run: flutter pub get
-      - run: flutter test
-      - run: flutter analyze
+ test:
+ runs-on: ubuntu-latest
+ steps:
+ - uses: actions/checkout@v2
+ - uses: subosito/flutter-action@v2
+ with:
+ flutter-version: '3.x'
+ - run: flutter pub get
+ - run: flutter test
+ - run: flutter analyze
 ```
