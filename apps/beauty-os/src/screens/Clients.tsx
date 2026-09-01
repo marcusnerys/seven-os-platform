@@ -2,7 +2,7 @@ import React, { useState, useEffect, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
-import { Search, Plus, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2 } from 'lucide-react';
+import { Search, Plus, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore, Client } from '../lib/store';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
@@ -32,6 +32,48 @@ export default function Clients() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [whatsappPrompt, setWhatsappPrompt] = useState<{ phone: string, message: string, title?: string } | null>(null);
+
+  const syncBirthdayToCalendar = (client: Client) => {
+    if (!client.birthDate) {
+      setToast({ message: "Aniversário não cadastrado", type: 'error' });
+      return;
+    }
+
+    const [year, month, day] = client.birthDate.split('-');
+    const dtstart = `${year}${month}${day}`;
+    const uid = `birthday-${client.id}@leshanot`;
+    const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Leshanot Beauty OS//PT',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${dtstart}`,
+      `RRULE:FREQ=YEARLY`,
+      `SUMMARY:🎂 Aniversário - ${client.name}`,
+      `DESCRIPTION:Cliente do Leshanot Studio\\nTelefone: ${client.phone}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT0S',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:🎂 Hoje é aniversário de ${client.name}!`,
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aniversario-${client.name.toLowerCase().replace(/\s+/g, '-')}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setToast({ message: `Aniversário de ${client.name} exportado!`, type: 'success' });
+  };
 
   const triggerAutomation = (type: string, clientData: any) => {
     const template = automationTemplates.find(t => t.type === type && t.isActive);
@@ -269,9 +311,23 @@ export default function Clients() {
             </div>
           ))}
           {filteredClients.length === 0 && (
-            <div className="text-center py-20 opacity-20 flex flex-col items-center gap-4">
-              <Search size={40} />
-              <p className="text-[11px] font-bold uppercase tracking-widest leading-loose">Nenhuma cliente <br /> encontrada</p>
+            <div className="text-center py-16 flex flex-col items-center gap-4">
+              {clients.length === 0 ? (
+                <>
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center opacity-30">
+                    <Plus size={32} />
+                  </div>
+                  <div className="opacity-40">
+                    <p className="text-[14px] font-bold text-white mb-1">Nenhuma cliente ainda</p>
+                    <p className="text-[11px] text-white/50 leading-relaxed">Toque no <span className="text-ios-gold">+</span> para cadastrar<br />sua primeira cliente</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Search size={40} className="opacity-20" />
+                  <p className="text-[11px] font-bold uppercase tracking-widest opacity-20">Nenhuma cliente encontrada</p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -446,6 +502,17 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
+
+              {selectedClient.birthDate && (
+                <Button
+                  variant="secondary"
+                  className="w-full h-12 bg-ios-gold/5 border-ios-gold/20 text-ios-gold gap-2"
+                  onClick={() => syncBirthdayToCalendar(selectedClient)}
+                >
+                  <CalendarCheck size={18} />
+                  Sincronizar Aniversário com Agenda
+                </Button>
+              )}
             </div>
           </Modal>
         )}

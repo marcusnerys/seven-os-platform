@@ -2,17 +2,24 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input, Textarea } from '../components/UI';
 import { Logo } from '../components/Logo';
-import { Plus, ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon, User, MessageCircle } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon, User, MessageCircle, Trash2, X, CalendarPlus, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore, Appointment } from '../lib/store';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
 export default function Agenda() {
   const { appointments, clients, addAppointment, updateAppointment, updateAppointmentStatus, completeAppointment, isSlotAvailable, deleteAppointment, addTransaction, modalToOpen, modalData, setToast, setModalToOpen, automationTemplates } = useStore();
-  const [selectedDate, setSelectedDate] = useState(new Date().getDate().toString());
+  const themeBg = useStore(state => state.themeBg);
+  const isLight = themeBg === 'light';
+  const textPrimary = isLight ? '#1C1C1E' : '#F5F5F7';
+  const textSecondary = isLight ? '#6B6B70' : '#8E8E93';
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [selectedFullDate, setSelectedFullDate] = useState(new Date().toISOString().split('T')[0]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [isFabOpen, setIsFabOpen] = useState(false);
 
   useEffect(() => {
     if (modalToOpen === 'appointment') {
@@ -29,7 +36,7 @@ export default function Agenda() {
     clientId: '',
     service: '',
     time: '',
-    date: new Date().toISOString().split('T')[0],
+    date: selectedFullDate,
     duration: 60,
     price: 0,
     notes: ''
@@ -127,7 +134,7 @@ export default function Agenda() {
         clientId: '',
         service: '',
         time: '',
-        date: new Date().toISOString().split('T')[0],
+        date: selectedFullDate,
         duration: 60,
         price: 0,
         notes: ''
@@ -143,20 +150,28 @@ export default function Agenda() {
     }
   };
 
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - d.getDay() + i + 1); // Start from Monday
-    return {
-      day: ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'][d.getDay()],
-      date: d.getDate().toString(),
-      fullDate: d.toISOString().split('T')[0]
-    };
-  });
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const weekDays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-  const displayAppointments = appointments.filter(appt => {
-    const day = days.find(d => d.date === selectedDate);
-    return appt.date === day?.fullDate;
-  });
+  const calendarCells = [
+    ...Array(firstDayOfMonth).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const toFullDate = (day: number) => {
+    const m = String(currentMonth + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    return `${currentYear}-${m}-${d}`;
+  };
+
+  const hasAppointments = (day: number) =>
+    appointments.some(a => a.date === toFullDate(day) && a.status !== 'Cancelado');
+
+  const displayAppointments = appointments.filter(appt => appt.date === selectedFullDate);
 
   const getClientName = (appt: Appointment) => {
     if (appt.clientId === 'public-booking') {
@@ -166,40 +181,141 @@ export default function Agenda() {
     return client?.name || 'Cliente deletado';
   };
 
+  const exportICS = (appt: Appointment) => {
+    const [y, m, d] = appt.date.split('-');
+    const [h, min] = appt.time.split(':');
+    const padded = (n: string) => n.padStart(2, '0');
+    const dtStart = `${y}${padded(m)}${padded(d)}T${padded(h)}${padded(min)}00`;
+    const endMin = Number(h) * 60 + Number(min) + (appt.duration || 60);
+    const endH = String(Math.floor(endMin / 60) % 24).padStart(2, '0');
+    const endM = String(endMin % 60).padStart(2, '0');
+    const dtEnd = `${y}${padded(m)}${padded(d)}T${endH}${endM}00`;
+    const clientName = getClientName(appt);
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Leshanot Studio//Beauty OS//PT',
+      'BEGIN:VEVENT',
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:${appt.service} - ${clientName}`,
+      `DESCRIPTION:Serviço: ${appt.service}\\nCliente: ${clientName}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}${appt.notes ? '\\nObs: ' + appt.notes : ''}`,
+      'LOCATION:Leshanot Studio',
+      `STATUS:${appt.status === 'Cancelado' ? 'CANCELLED' : 'CONFIRMED'}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agendamento-${appt.date}-${appt.service.replace(/\s/g, '-')}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="p-6 pb-2 shrink-0">
-        <div className="flex items-center justify-between mb-2 mt-4">
+      <div className="px-5 pt-5 pb-2 shrink-0">
+        <div className="flex items-center justify-between mb-4 mt-2">
           <Logo size="sm" />
-          <h1 className="text-[18px] font-bold tracking-tightest uppercase text-ios-text-secondary opacity-40">Agenda</h1>
+          <h1 className="text-[16px] font-bold tracking-tightest uppercase text-ios-text-secondary opacity-40">Agenda</h1>
         </div>
 
-        {/* Date Selector */}
-        <div className="flex gap-2 mb-6 overflow-x-auto hide-scrollbar shrink-0">
-          {days.map((d, i) => (
-            <div 
-              key={i} 
-              onClick={() => setSelectedDate(d.date)}
-              className={cn(
-                "flex flex-col items-center gap-1 min-w-[44px] p-2.5 rounded-xl transition-all duration-300 cursor-pointer",
-                selectedDate === d.date ? "bg-ios-gold text-ios-bg shadow-lg shadow-ios-gold/20" : "bg-white/5 border border-white/10"
-              )}
-            >
-              <span className={cn("text-[9px] font-bold uppercase tracking-wider", selectedDate === d.date ? "text-ios-bg" : "opacity-60")}>
-                {d.day}
-              </span>
-              <span className="text-sm font-extrabold">{d.date}</span>
+        {/* Month Navigator */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => {
+              if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); }
+              else setCurrentMonth(m => m - 1);
+            }}
+            className="w-8 h-8 rounded-full bg-ios-surface flex items-center justify-center text-ios-text-secondary active:scale-90 transition-transform"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <div className="text-center">
+            <span className="text-[22px] font-black tracking-tight" style={{ color: textPrimary }}>
+              {monthNames[currentMonth]}
+            </span>
+            <span className="text-[13px] font-bold ml-2" style={{ color: textSecondary }}>{currentYear}</span>
+          </div>
+          <button
+            onClick={() => {
+              if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); }
+              else setCurrentMonth(m => m + 1);
+            }}
+            className="w-8 h-8 rounded-full bg-ios-surface flex items-center justify-center text-ios-text-secondary active:scale-90 transition-transform"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Week day headers */}
+        <div className="grid grid-cols-7 mb-2 rounded-xl px-1 py-2" style={{ border: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'}` }}>
+          {weekDays.map(d => (
+            <div key={d} className="text-center text-[11px] font-bold uppercase tracking-wide" style={{ color: textSecondary }}>
+              {d}
             </div>
           ))}
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-7 gap-y-1 mb-3">
+          {calendarCells.map((day, i) => {
+            if (!day) return <div key={`empty-${i}`} />;
+            const fullDate = toFullDate(day);
+            const isToday = fullDate === todayStr;
+            const isSelected = fullDate === selectedFullDate;
+            const hasDot = hasAppointments(day);
+            return (
+              <div
+                key={fullDate}
+                onClick={() => setSelectedFullDate(fullDate)}
+                className="flex flex-col items-center justify-center gap-0.5 py-1 cursor-pointer"
+              >
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[14px] font-bold transition-all"
+                  style={{
+                    backgroundColor: isSelected ? 'var(--color-ios-gold)' : isToday ? (isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.10)') : 'transparent',
+                    color: isSelected ? (isLight ? '#F2F2F7' : '#0B0B0D') : isToday ? 'var(--color-ios-gold)' : textPrimary,
+                    boxShadow: isSelected ? '0 2px 8px rgba(var(--color-ios-gold-rgb, 212,175,55), 0.3)' : undefined,
+                    outline: isToday && !isSelected ? `1px solid var(--color-ios-gold)` : undefined,
+                  }}
+                >
+                  {day}
+                </div>
+                {hasDot && (
+                  <div
+                    className="w-1 h-1 rounded-full"
+                    style={{ backgroundColor: isSelected ? (isLight ? '#F2F2F7' : '#0B0B0D') : 'var(--color-ios-gold)' }}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-y-auto px-6 pb-12 hide-scrollbar">
-        <div className="flex flex-col gap-6 relative">
+      <div className="flex-1 overflow-y-auto px-5 pb-12 hide-scrollbar">
+        {/* Selected day label */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: textSecondary }}>
+            {selectedFullDate === todayStr ? 'Hoje' : (() => {
+              const [y, m, d] = selectedFullDate.split('-');
+              return `${d}/${m}/${y}`;
+            })()}
+          </span>
+          {displayAppointments.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-ios-gold/15 text-ios-gold text-[10px] font-bold">
+              {displayAppointments.length} agendamento{displayAppointments.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col gap-4 relative">
           {/* Vertical Line */}
-          <div className="absolute left-[38px] top-6 bottom-6 w-[1px] bg-white/5 opacity-50" />
+          <div className="absolute left-[38px] top-4 bottom-4 w-[1px] bg-white/5 opacity-50" />
 
           {displayAppointments.length > 0 ? (
             displayAppointments.map((appt) => {
@@ -250,13 +366,103 @@ export default function Agenda() {
         </div>
       </div>
 
-      {/* FAB */}
-      <button 
-        onClick={() => setIsAddModalOpen(true)}
-        className="absolute bottom-6 right-6 w-12 h-12 rounded-full bg-ios-gold flex items-center justify-center text-ios-bg shadow-[0_10px_20px_rgba(230,192,139,0.3)] active:scale-95 transition-transform z-30"
-      >
-        <Plus size={24} strokeWidth={2.5} />
-      </button>
+      {/* FAB overlay */}
+      {isFabOpen && (
+        <div className="absolute inset-0 z-20" onClick={() => setIsFabOpen(false)} />
+      )}
+
+      {/* FAB SpeedDial */}
+      <div className="absolute bottom-6 right-6 flex flex-col items-end gap-3 z-30">
+        <AnimatePresence>
+          {isFabOpen && (
+            <>
+              {[
+                {
+                  label: 'Adicionar',
+                  icon: CalendarPlus,
+                  color: 'bg-ios-gold',
+                  action: () => { setNewAppt(prev => ({ ...prev, date: selectedFullDate })); setIsAddModalOpen(true); setIsFabOpen(false); },
+                  always: true,
+                },
+                {
+                  label: 'Enviar mensagem',
+                  icon: MessageCircle,
+                  color: 'bg-[#25D366]',
+                  action: () => {
+                    const upcoming = displayAppointments.find(a => a.status !== 'Cancelado');
+                    if (upcoming) {
+                      const client = clients.find(c => c.id === upcoming.clientId);
+                      const phone = client?.phone || upcoming.clientPhone;
+                      if (phone) {
+                        openWhatsApp(phone, `Olá ${upcoming.clientName}! Confirmando seu horário: ${upcoming.service} às ${upcoming.time}.`);
+                      } else {
+                        setToast({ message: 'Cliente sem telefone cadastrado', type: 'error' });
+                      }
+                    } else {
+                      setToast({ message: 'Nenhum agendamento nesta data', type: 'error' });
+                    }
+                    setIsFabOpen(false);
+                  },
+                  always: true,
+                },
+                ...(displayAppointments.length > 0 ? [{
+                  label: 'Apagar',
+                  icon: Trash2,
+                  color: 'bg-red-500/90',
+                  action: () => {
+                    if (displayAppointments.length === 1) {
+                      if (confirm(`Apagar agendamento de ${displayAppointments[0].clientName}?`)) {
+                        deleteAppointment(displayAppointments[0].id);
+                        setToast({ message: 'Agendamento apagado', type: 'success' });
+                      }
+                    } else {
+                      setToast({ message: 'Toque no agendamento e selecione Cancelar para apagar', type: 'success' });
+                    }
+                    setIsFabOpen(false);
+                  },
+                  always: false,
+                }] : []),
+              ].map((item, i) => (
+                <motion.div
+                  key={item.label}
+                  initial={{ opacity: 0, x: 20, scale: 0.8 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 20, scale: 0.8 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="flex items-center gap-3"
+                >
+                  <span className="text-[12px] font-bold text-white bg-black/60 px-3 py-1.5 rounded-full backdrop-blur-sm whitespace-nowrap">
+                    {item.label}
+                  </span>
+                  <button
+                    onClick={item.action}
+                    className={`w-11 h-11 rounded-full ${item.color} flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform`}
+                  >
+                    <item.icon size={20} strokeWidth={2} />
+                  </button>
+                </motion.div>
+              ))}
+            </>
+          )}
+        </AnimatePresence>
+
+        <button
+          onClick={() => setIsFabOpen(v => !v)}
+          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all duration-200 ${isFabOpen ? 'bg-white/15 border border-white/20 text-white' : 'bg-ios-gold text-ios-bg shadow-[0_10px_20px_rgba(230,192,139,0.3)]'}`}
+        >
+          <AnimatePresence mode="wait">
+            {isFabOpen ? (
+              <motion.div key="close" initial={{ opacity: 0, rotate: -90 }} animate={{ opacity: 1, rotate: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                <X size={24} strokeWidth={2.5} />
+              </motion.div>
+            ) : (
+              <motion.div key="open" initial={{ opacity: 0, rotate: 90 }} animate={{ opacity: 1, rotate: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                <Plus size={24} strokeWidth={2.5} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </button>
+      </div>
 
       {/* Appointment Detail Modal */}
       <AnimatePresence>
@@ -300,8 +506,16 @@ export default function Agenda() {
                   </Button>
                 )}
                 <div className="flex gap-3">
-                  <Button 
-                    variant="secondary" 
+                  <Button
+                    variant="secondary"
+                    className="h-14 px-4 border-ios-gold/20"
+                    onClick={() => exportICS(selectedAppointment)}
+                    title="Exportar para Calendário"
+                  >
+                    <Download size={18} />
+                  </Button>
+                  <Button
+                    variant="secondary"
                     className="flex-1 h-14"
                     onClick={() => {
                       setNewAppt({
