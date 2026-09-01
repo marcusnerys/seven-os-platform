@@ -34,20 +34,22 @@
   }
 }
 
-.card-immersive {
-  @apply bg-ios-surface border border-ios-border rounded-ios shadow-[0_8px_24px_rgba(0,0,0,0.2)];
-}
+@layer components {
+  .card-immersive {
+    @apply bg-ios-surface border border-ios-border rounded-ios shadow-[0_8px_24px_rgba(0,0,0,0.2)];
+  }
 
-.card-gold-immersive {
-  @apply bg-linear-to-br from-ios-surface to-[#25252A] border border-ios-border border-l-[3px] border-l-ios-gold rounded-ios;
-}
+  .card-gold-immersive {
+    @apply bg-linear-to-br from-ios-surface to-[#25252A] border border-ios-border border-l-[3px] border-l-ios-gold rounded-ios;
+  }
 
-.kpi-card-immersive {
-  @apply bg-ios-glass border border-ios-border rounded-[18px];
-}
+  .kpi-card-immersive {
+    @apply bg-ios-glass border border-ios-border rounded-[18px];
+  }
 
-.glass-nav {
-  @apply bg-[#1A1A1D]/80 backdrop-blur-[20px] border-t border-ios-border;
+  .glass-nav {
+    @apply bg-[#1A1A1D]/80 backdrop-blur-[20px] border-t border-ios-border;
+  }
 }
 
 .hide-scrollbar::-webkit-scrollbar {

@@ -2,39 +2,43 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Button, Toast, Modal } from '../components/UI';
 import { Logo } from '../components/Logo';
-import { 
-  Settings, 
-  Bell, 
-  Shield, 
-  Cloud, 
-  CreditCard, 
-  HelpCircle, 
-  ChevronRight, 
-  LogOut, 
-  Smartphone,
-  Users,
-  Calendar,
+import {
+  Settings,
+  CreditCard,
+  ChevronRight,
+  LogOut,
   Save,
   Globe,
   MapPin,
-  Sparkles,
-  Scissors,
   Plus as PlusIcon,
   Trash2,
   MessageCircle,
-  Camera
+  Camera,
+  RefreshCw,
+  Tag
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { applyTheme } from '../components/ThemeOnboarding';
 
 import { supabase } from '../lib/supabase';
 import { useStore } from '../lib/store';
-import { seedTestData, clearAllData } from '../lib/testData';
+import { getVertical } from '../lib/vertical';
+
+const ACCENT_COLORS = [
+  { name: 'Dourado', value: '#D4AF37', neon: '#F5D062' },
+  { name: 'Rosa',    value: '#FF6B9D', neon: '#FF2D78' },
+  { name: 'Ciano',   value: '#00E6FF', neon: '#00C8FF' },
+  { name: 'Laranja', value: '#FF7043', neon: '#FF4500' },
+  { name: 'Roxo',    value: '#9B59B6', neon: '#A855F7' },
+];
 
 export default function More() {
   const user = useStore(state => state.user);
   const updateUserAvatar = useStore(state => state.updateUserAvatar);
+  const themeAccent = useStore(state => state.themeAccent);
+  const themeBg = useStore(state => state.themeBg);
+  const setTheme = useStore(state => state.setTheme);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const appointments = useStore(state => state.appointments);
   const services = useStore(state => state.services);
   const addService = useStore(state => state.addService);
   const deleteService = useStore(state => state.deleteService);
@@ -51,8 +55,14 @@ export default function More() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 1024 * 1024) {
-      setToast({ message: 'A imagem deve ter menos de 1MB', type: 'error' });
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setToast({ message: 'Apenas imagens JPEG, PNG, WebP ou GIF são permitidas', type: 'error' });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setToast({ message: 'A imagem deve ter menos de 5MB', type: 'error' });
       return;
     }
 
@@ -69,6 +79,13 @@ export default function More() {
   const [isServicesOpen, setIsServicesOpen] = useState(false);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [browserUrl, setBrowserUrl] = useState('');
+  const setHasOnboarded = useStore(state => state.setHasOnboarded);
+  const vertical = getVertical(settings.businessType);
+  const isLight = themeBg === 'light';
+  const textPrimary = isLight ? '#1C1C1E' : '#F5F5F7';
+  const inputBg = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)';
+  const inputBorder = isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.10)';
+
   const [newService, setNewService] = useState({ name: '', price: 0, duration: 60 });
   const [editSettings, setEditSettings] = useState(settings);
 
@@ -96,70 +113,6 @@ export default function More() {
     const link = `${window.location.origin}/book/${user.id}`;
     navigator.clipboard.writeText(link);
     setToast({ message: "Link copiado para a área de transferência", type: 'success' });
-  };
-
-  const handleContactSync = async () => {
-    setLoadingAction('Sincronizar contatos');
-    try {
-      // Check for Contact Picker API Support
-      if ('contacts' in navigator && 'ContactsManager' in window) {
-        const props = ['name', 'tel', 'email'];
-        const opts = { multiple: true };
-        try {
-          const contactsList = await (navigator as any).contacts.select(props, opts);
-          console.log('Selected contacts:', contactsList);
-          setToast({ message: `${contactsList.length} contatos sincronizados`, type: 'success' });
-        } catch (err: any) {
-          if (err.name !== 'AbortError') {
-            throw err;
-          }
-        }
-      } else {
-        // Simulation for browsers that don't support it
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        setToast({ message: "Contatos sincronizados via backup local", type: 'success' });
-      }
-    } catch (error) {
-      setToast({ message: "Erro ao sincronizar contatos", type: 'error' });
-    } finally {
-      setLoadingAction(null);
-    }
-  };
-
-  const handleCalendarSync = async () => {
-    setLoadingAction('Sync com agenda');
-    try {
-      // Simulate/Trigger ICS generation
-      if (appointments.length === 0) {
-        setToast({ message: "Nenhum agendamento para sincronizar", type: 'error' });
-        setLoadingAction(null);
-        return;
-      }
-
-      // Generate ICS Content
-      let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Leshanot//Studio//PT\n";
-      appointments.forEach(appt => {
-        const start = appt.date.replace(/-/g, '') + 'T' + appt.time.replace(':', '') + '00';
-        icsContent += `BEGIN:VEVENT\nSUMMARY:${appt.service}\nDTSTART:${start}\nDESCRIPTION:Serviço agendado no Leshanot Studio\nEND:VEVENT\n`;
-      });
-      icsContent += "END:VCALENDAR";
-
-      const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'agenda-leshanot.ics');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setToast({ message: "Agenda exportada com sucesso", type: 'success' });
-    } catch (error) {
-      setToast({ message: "Erro ao sincronizar agenda", type: 'error' });
-    } finally {
-      setLoadingAction(null);
-    }
   };
 
   const handleSaveSettings = async () => {
@@ -191,78 +144,21 @@ export default function More() {
 
   const sections = [
     {
-      title: 'Gestão',
+      title: 'Negócio',
       items: [
-        { label: 'Clientes', icon: Users, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('clients') },
-        { label: 'Agenda', icon: Calendar, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('agenda') },
-        { label: 'Serviços', icon: Scissors, color: 'text-ios-gold', action: () => setIsServicesOpen(true), badge: services.length.toString() },
-      ]
-    },
-    {
-      title: 'Sistema',
-      items: [
-        { label: 'Notificações', icon: Bell, color: 'text-ios-gold' },
-        { label: 'Automação WhatsApp', icon: MessageCircle, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('automation') },
-        { label: 'Cloud Sync', icon: Cloud, color: 'text-ios-cyan' },
+        { label: vertical.serviceNounPlural, icon: Tag, color: 'text-ios-gold', action: () => setIsServicesOpen(true), badge: services.length.toString() },
         { label: 'Link de Agendamento', icon: Globe, color: 'text-ios-cyan', action: openInAppBrowser },
-        { label: 'Sincronizar contatos', icon: Users, color: 'text-ios-cyan', action: handleContactSync },
+        { label: 'Automação WhatsApp', icon: MessageCircle, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('automation') },
       ]
     },
     {
-      title: 'Conta & Assinatura',
+      title: 'Conta',
       items: [
+        { label: `Configurações do ${vertical.businessNoun}`, icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
+        { label: 'Refazer configuração inicial', icon: RefreshCw, color: 'text-ios-text-secondary', action: () => setHasOnboarded(false) },
         { label: 'Plano Premium', icon: CreditCard, color: 'text-ios-gold', badge: 'Ativo' },
-        { label: 'Configurações', icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
-        { label: 'Dispositivos', icon: Smartphone, color: 'text-ios-text-secondary' },
       ]
     },
-    {
-      title: 'Suporte',
-      items: [
-        { label: 'Ajuda & FAQ', icon: HelpCircle, color: 'text-ios-text-secondary' },
-      ]
-    },
-    {
-      title: 'Debug & Testing',
-      items: [
-        { 
-          label: 'Gerar Dados de Teste', 
-          icon: Sparkles, 
-          color: 'text-ios-cyan', 
-          action: async () => {
-            if (!user) return;
-            setLoadingAction('Gerar Dados de Teste');
-            try {
-              await seedTestData(user.id);
-              setToast({ message: "Dados de teste gerados!", type: 'success' });
-            } catch (e) {
-              setToast({ message: "Erro ao gerar dados", type: 'error' });
-            } finally {
-              setLoadingAction(null);
-            }
-          } 
-        },
-        { 
-          label: 'Limpar Todos os Dados', 
-          icon: Trash2, 
-          color: 'text-red-400', 
-          action: async () => {
-            if (!user) return;
-            if (confirm("Isso apagará TODOS os seus dados do banco. Deseja continuar?")) {
-              setLoadingAction('Limpar Todos os Dados');
-              try {
-                await clearAllData(user.id);
-                setToast({ message: "Banco de dados limpo!", type: 'success' });
-              } catch (e) {
-                setToast({ message: "Erro ao limpar dados", type: 'error' });
-              } finally {
-                setLoadingAction(null);
-              }
-            }
-          } 
-        }
-      ]
-    }
   ];
 
   return (
@@ -295,7 +191,7 @@ export default function More() {
              />
            </div>
            <div className="flex-1">
-             <h3 className="text-[18px] font-bold text-white tracking-tightest">
+             <h3 className="text-[18px] font-bold text-ios-text-primary tracking-tightest">
                {user?.user_metadata?.full_name || 'Usuário'}
              </h3>
              <p className="text-[12px] text-ios-text-secondary font-medium">
@@ -316,10 +212,10 @@ export default function More() {
                 {section.items.map((item, iidx) => {
                   const isLoading = loadingAction === item.label;
                   return (
-                    <GlassCard 
-                      key={iidx} 
+                    <GlassCard
+                      key={iidx}
                       onClick={(item as any).action}
-                      className="p-4 flex items-center justify-between bg-[#151518] border-none active:bg-white/5 transition-colors cursor-pointer"
+                      className="p-4 flex items-center justify-between border-none active:bg-white/5 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-4">
                          <div className={cn("w-8 h-8 rounded-lg bg-white/[0.03] flex items-center justify-center", item.color)}>
@@ -329,7 +225,7 @@ export default function More() {
                               <item.icon size={18} />
                             )}
                          </div>
-                         <span className="text-[15px] font-medium text-white">{item.label}</span>
+                         <span className="text-[15px] font-medium text-ios-text-primary">{item.label}</span>
                       </div>
                       <div className="flex items-center gap-3">
                          {item.badge && <StatusBadge label={item.badge} variant="ios" />}
@@ -372,22 +268,25 @@ export default function More() {
                 <div className="flex flex-col gap-3">
                   <input 
                     placeholder="Nome do serviço" 
-                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none" 
+                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none"
+                    style={{ color: textPrimary, background: inputBg, borderColor: inputBorder }}
                     value={newService.name}
                     onChange={e => setNewService({ ...newService, name: e.target.value })}
                   />
                   <div className="grid grid-cols-2 gap-3">
                     <input 
                       type="number"
-                      placeholder="Preço (R$)" 
-                      className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none" 
+                      placeholder="Preço (R$)"
+                      className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none"
+                      style={{ color: textPrimary, background: inputBg, borderColor: inputBorder }}
                       value={newService.price || ''}
                       onChange={e => setNewService({ ...newService, price: parseFloat(e.target.value) })}
                     />
                     <input 
                       type="number"
-                      placeholder="Minutos" 
-                      className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none" 
+                      placeholder="Minutos"
+                      className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none"
+                      style={{ color: textPrimary, background: inputBg, borderColor: inputBorder }}
                       value={newService.duration || ''}
                       onChange={e => setNewService({ ...newService, duration: parseInt(e.target.value) })}
                     />
@@ -407,7 +306,7 @@ export default function More() {
                   {services.map(s => (
                     <div key={s.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-white leading-tight">{s.name}</p>
+                        <p className="font-bold leading-tight" style={{ color: textPrimary }}>{s.name}</p>
                         <p className="text-[12px] text-ios-text-secondary font-medium">R$ {s.price} • {s.duration} min</p>
                       </div>
                       <button 
@@ -447,12 +346,13 @@ export default function More() {
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Nome do Estúdio</label>
+                  <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">{vertical.businessNameLabel}</label>
                   <div className="relative">
-                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-text-secondary opacity-40" size={16} />
+                    <Settings className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-text-secondary opacity-40" size={16} />
                     <input 
                       type="text" 
-                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white focus:outline-none" 
+                      className="w-full rounded-xl pl-11 pr-4 py-3 focus:outline-none"
+                      style={{ color: textPrimary, background: inputBg, border: `1px solid ${inputBorder}` }}
                       value={editSettings.studioName}
                       onChange={e => setEditSettings({ ...editSettings, studioName: e.target.value })}
                     />
@@ -465,7 +365,8 @@ export default function More() {
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-text-secondary opacity-40" size={16} />
                     <input 
                       type="text" 
-                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white focus:outline-none" 
+                      className="w-full rounded-xl pl-11 pr-4 py-3 focus:outline-none"
+                      style={{ color: textPrimary, background: inputBg, border: `1px solid ${inputBorder}` }}
                       value={editSettings.location}
                       onChange={e => setEditSettings({ ...editSettings, location: e.target.value })}
                     />
@@ -476,8 +377,9 @@ export default function More() {
                   <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Moeda / Região</label>
                   <div className="relative">
                     <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-text-secondary opacity-40" size={16} />
-                    <select 
-                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-white focus:outline-none appearance-none"
+                    <select
+                      className="w-full rounded-xl pl-11 pr-4 py-3 focus:outline-none appearance-none"
+                      style={{ color: textPrimary, background: inputBg, border: `1px solid ${inputBorder}` }}
                       value={editSettings.currency}
                       onChange={e => setEditSettings({ ...editSettings, currency: e.target.value })}
                     >
@@ -485,6 +387,49 @@ export default function More() {
                       <option value="USD" className="bg-[#121214]">Dólar Americano (USD)</option>
                       <option value="EUR" className="bg-[#121214]">Euro (EUR)</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Theme section */}
+                <div className="flex flex-col gap-3 pt-2 border-t border-white/5">
+                  <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Tema do App</label>
+
+                  {/* Background toggle */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['dark', 'light'] as const).map(bg => (
+                      <button
+                        key={bg}
+                        type="button"
+                        onClick={() => setTheme(themeAccent, bg)}
+                        className={cn(
+                          "h-10 rounded-xl text-[13px] font-bold border-2 transition-all",
+                          themeBg === bg ? "border-ios-gold" : "border-white/10 opacity-50"
+                        )}
+                        style={{ background: bg === 'dark' ? '#0B0B0D' : '#F2F2F7', color: bg === 'dark' ? '#F5F5F7' : '#1C1C1E' }}
+                      >
+                        {bg === 'dark' ? '🌙 Escuro' : '☀️ Claro'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Accent color picker */}
+                  <div className="flex gap-3 justify-center pt-1">
+                    {ACCENT_COLORS.map(c => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => setTheme(c.value, themeBg)}
+                        className={cn(
+                          "w-9 h-9 rounded-full border-2 transition-all active:scale-90",
+                          themeAccent === c.value ? "border-white scale-110" : "border-transparent"
+                        )}
+                        style={{
+                          background: `radial-gradient(circle at 30% 30%, ${c.neon}, ${c.value})`,
+                          boxShadow: themeAccent === c.value ? `0 0 14px ${c.value}80` : undefined,
+                        }}
+                        title={c.name}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
@@ -517,10 +462,11 @@ export default function More() {
             }
           >
             <div className="w-full h-[60vh] rounded-2xl overflow-hidden bg-white/5 border border-white/10">
-              <iframe 
-                src={browserUrl} 
+              <iframe
+                src={browserUrl}
                 className="w-full h-full border-none"
                 title="Booking Page"
+                sandbox="allow-scripts allow-same-origin allow-forms"
               />
             </div>
           </Modal>

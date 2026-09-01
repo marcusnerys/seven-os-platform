@@ -16,11 +16,11 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   return (
     <div className={cn("flex flex-col items-start select-none", sizes[size], className)} id="brand-logo">
       <div className="flex items-baseline font-brush leading-none">
-        <span className="text-white text-5xl">Les#</span>
-        <span className="text-ios-cyan text-5xl">@not</span>
+        <span className="text-ios-text-primary text-5xl">Les#</span>
+        <span className="text-ios-gold text-5xl">@not</span>
       </div>
-      <div className="w-full h-[1px] bg-ios-cyan my-2 opacity-80" />
-      <div className="font-futuristic text-[11px] uppercase tracking-[0.2em] text-ios-cyan opacity-80 whitespace-nowrap">
+      <div className="w-full h-[1px] bg-ios-gold my-2 opacity-80" />
+      <div className="font-futuristic text-[11px] uppercase tracking-[0.2em] text-ios-gold opacity-80 whitespace-nowrap">
         Automatize. Organize. Prospere.
       </div>
     </div>

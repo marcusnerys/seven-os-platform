@@ -333,7 +333,7 @@ export function Input({
     <div className="relative flex items-center group w-full">
       <input
         className={cn(
-          "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-ios-gold/50 transition-colors pr-10",
+          "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-ios-text-primary focus:outline-none focus:border-ios-gold/50 transition-colors pr-10",
           className
         )}
         value={interim ? (value ? value + ' ' + interim : interim) : value}

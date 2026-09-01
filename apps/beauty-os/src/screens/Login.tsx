@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Button, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
-import { LogIn, UserPlus, Key, ArrowLeft, Mail, Lock } from 'lucide-react';
+import { LogIn, UserPlus, Key, ArrowLeft, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -12,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +63,7 @@ export default function Login() {
         <div className="flex flex-col items-center gap-4">
           <Logo size="lg" />
           <div className="text-center">
-            <h1 className="text-[28px] font-bold text-white tracking-tightest leading-tight">LESHANOT</h1>
+            <h1 className="text-[28px] font-bold text-ios-text-primary tracking-tightest leading-tight">LESHANOT</h1>
             <p className="text-ios-gold font-bold tracking-[4px] text-[10px] uppercase mt-1">Studio OS</p>
           </div>
         </div>
@@ -78,7 +79,7 @@ export default function Login() {
                 className="flex flex-col gap-4"
               >
                 <div className="text-center space-y-2 mb-2">
-                  <h2 className="text-[20px] font-bold text-white">Bem-vinda ao luxo</h2>
+                  <h2 className="text-[20px] font-bold text-ios-text-primary">Bem-vindo(a) de volta</h2>
                   <p className="text-[14px] text-ios-text-secondary px-2">Escolha como deseja acessar sua plataforma.</p>
                 </div>
 
@@ -107,14 +108,14 @@ export default function Login() {
               >
                 <button 
                   onClick={() => { setMode('selection'); setError(''); setSuccess(''); }}
-                  className="flex items-center gap-2 text-ios-text-secondary hover:text-white transition-colors mb-2 w-fit"
+                  className="flex items-center gap-2 text-ios-text-secondary hover:text-ios-text-primary transition-colors mb-2 w-fit"
                 >
                   <ArrowLeft size={16} />
                   <span className="text-[13px] font-medium">Voltar</span>
                 </button>
 
                 <div className="text-center mb-2">
-                  <h2 className="text-[20px] font-bold text-white capitalize">
+                  <h2 className="text-[20px] font-bold text-ios-text-primary capitalize">
                     {mode === 'email' ? 'Entrar' : mode === 'register' ? 'Criar Conta' : 'Recuperar Senha'}
                   </h2>
                 </div>
@@ -134,14 +135,24 @@ export default function Login() {
                   {mode !== 'forgot' && (
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-ios-text-secondary uppercase px-1">Senha</label>
-                      <Input 
-                        type="password"
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        required
-                        minLength={6}
-                      />
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={e => setPassword(e.target.value)}
+                          required
+                          minLength={6}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(p => !p)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-ios-text-secondary hover:text-ios-text-primary transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
                   )}
 
