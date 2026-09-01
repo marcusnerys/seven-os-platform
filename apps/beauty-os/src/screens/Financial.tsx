@@ -47,72 +47,41 @@ export default function Financial() {
     description: ''
   });
 
-  /** Plano A: Gemini. Lança erro se a chave faltar, expirar ou a API recusar. */
-  const readWithGemini = async (file: File): Promise<ParsedTransaction[]> => {
-    {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1] ?? result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+  /**
+   * Plano A: Edge Function do Supabase, que fala com o Gemini.
+   * A chave fica no servidor — nunca no bundle. Lança erro em qualquer
+   * falha, para o chamador cair no OCR local.
+   */
+  const readWithAI = async (file: File): Promise<ParsedTransaction[]> => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove o prefixo "data:image/jpeg;base64," — a API quer só o payload.
+        resolve(result.split(',')[1] ?? result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
-      const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!GEMINI_KEY) throw new Error('VITE_GEMINI_API_KEY não configurada');
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) throw new Error('Supabase não configurado');
 
-      const today = new Date().toISOString().split('T')[0];
-      const prompt = `Você é um assistente financeiro especializado em extratos bancários e anotações de gastos.
-Analise esta imagem e extraia TODAS as transações financeiras visíveis.
+    const res = await fetch(`${supabaseUrl}/functions/v1/parse-statement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ fileBase64: base64, mimeType: file.type }),
+    });
 
-Retorne SOMENTE um JSON válido neste formato, sem markdown, sem explicações adicionais:
-{"transactions":[{"date":"YYYY-MM-DD","description":"Descrição","amount":99.90,"type":"revenue","category":"categoria"}]}
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
 
-Regras:
-- Entradas/depósitos/créditos = type "revenue"
-- Saídas/débitos/gastos = type "expense"
-- Valores sempre positivos
-- Se a data não aparecer, use: ${today}
-- Categorize de forma inteligente (Aluguel, Produtos, Serviço, Alimentação, Transporte, etc)
-- Retorne JSON puro sem nenhum texto antes ou depois`;
-
-      const isOAuth = GEMINI_KEY.startsWith('AQ.');
-      const geminiUrl = isOAuth
-        ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
-        : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-      const geminiHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (isOAuth) geminiHeaders['Authorization'] = `Bearer ${GEMINI_KEY}`;
-
-      const res = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: geminiHeaders,
-        body: JSON.stringify({
-          contents: [{ parts: [
-            { text: prompt },
-            { inline_data: { mime_type: file.type.startsWith('image') ? file.type : 'image/jpeg', data: base64 } }
-          ]}],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
-        }),
-      });
-
-      const geminiData = await res.json();
-      if (!res.ok) throw new Error(`Gemini ${res.status}: ${geminiData?.error?.message || JSON.stringify(geminiData)}`);
-
-      const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-      if (!rawText) throw new Error('Gemini não retornou texto');
-
-      const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      let data: any;
-      try { data = JSON.parse(cleaned); } catch (_) {
-        const match = cleaned.match(/\{[\s\S]*\}/);
-        if (match) data = JSON.parse(match[0]);
-        else throw new Error('Resposta inválida do Gemini');
-      }
-
-      return (data.transactions ?? []) as ParsedTransaction[];
-    }
+    return (data.transactions ?? []) as ParsedTransaction[];
   };
 
   const handleStatementFile = async (file: File) => {
@@ -124,7 +93,7 @@ Regras:
       let txs: ParsedTransaction[] = [];
 
       try {
-        txs = await readWithGemini(file);
+        txs = await readWithAI(file);
       } catch (aiError) {
         // Chave expirada, sem cota ou offline: cai para o OCR local (grátis, sem chave).
         console.warn('IA indisponível, usando leitura local:', (aiError as Error).message);
