@@ -4,6 +4,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase, OperationType, handleSupabaseError } from './supabase';
 import { logger } from './qa/logger';
 import { perfMonitor } from './qa/performance';
+import type { BusinessType } from './vertical';
 
 export type AppointmentStatus = 'Confirmado' | 'Pendente' | 'Cancelado' | 'Concluído';
 
@@ -65,6 +66,7 @@ export interface Settings {
   studioName: string;
   location: string;
   currency: string;
+  businessType: BusinessType;
 }
 
 export interface Notification {
@@ -176,6 +178,14 @@ interface AppStore {
   toast: { message: string, type: 'success' | 'error' } | null;
   isVoiceActive: boolean;
 
+  themeAccent: string;
+  themeBg: 'dark' | 'light';
+  hasChosenTheme: boolean;
+  hasOnboarded: boolean;
+  setTheme: (accent: string, bg: 'dark' | 'light') => void;
+  setHasChosenTheme: (v: boolean) => void;
+  setHasOnboarded: (v: boolean) => void;
+
   setActiveTab: (tab: string) => void;
   setModalToOpen: (modal: 'appointment' | 'client' | 'revenue' | 'expense' | null, data?: any) => void;
   setToast: (toast: { message: string, type: 'success' | 'error' } | null) => void;
@@ -260,9 +270,9 @@ export const useStore = create<AppStore>()(
 
         supabase.from('beautyos_settings').select('*').eq('empresa_id', empresaId).maybeSingle().then(({ data }) => {
           if (data) {
-            set({ settings: { studioName: data.studio_name, location: data.location, currency: data.currency } });
+            set({ settings: { studioName: data.studio_name, location: data.location, currency: data.currency, businessType: (data.business_type ?? 'generic') as BusinessType } });
           } else {
-            const defaults = { studioName: 'Leshanot Studio', location: 'São Paulo, BR', currency: 'BRL' };
+            const defaults: Settings = { studioName: 'Meu Negócio', location: 'São Paulo, BR', currency: 'BRL', businessType: 'generic' };
             set({ settings: defaults });
           }
         });
@@ -303,9 +313,10 @@ export const useStore = create<AppStore>()(
         automationTemplates: [],
         automationLogs: [],
         settings: {
-          studioName: 'Leshanot Studio',
+          studioName: 'Meu Negócio',
           location: 'São Paulo, BR',
-          currency: 'BRL'
+          currency: 'BRL',
+          businessType: 'generic'
         },
         modalToOpen: null,
         modalData: null,
@@ -313,6 +324,23 @@ export const useStore = create<AppStore>()(
         showDevTools: false,
         setShowDevTools: (show) => set({ showDevTools: show }),
         isVoiceActive: false,
+        themeAccent: '#D4AF37',
+        themeBg: 'dark',
+        hasChosenTheme: false,
+        hasOnboarded: false,
+        setTheme: (accent, bg) => {
+          set({ themeAccent: accent, themeBg: bg });
+          const { user } = get();
+          if (user) {
+            supabase.from('beautyos_settings').upsert({
+              empresa_id: user.id,
+              theme_accent: accent,
+              theme_bg: bg,
+            }).then(() => {});
+          }
+        },
+        setHasChosenTheme: (v) => set({ hasChosenTheme: v }),
+        setHasOnboarded: (v) => set({ hasOnboarded: v }),
         setToast: (toast) => set({ toast }),
         setIsVoiceActive: (active) => set({ isVoiceActive: active }),
 
@@ -612,7 +640,7 @@ export const useStore = create<AppStore>()(
 
             get().setToast({ message: "Atendimento concluído e registrado!", type: 'success' });
           } catch (error) {
-            console.error('Error completing appointment:', error);
+            console.error('Error completing appointment:', error instanceof Error ? error.message : 'unknown error');
           }
         },
 
@@ -703,7 +731,7 @@ export const useStore = create<AppStore>()(
             if (error) throw error;
             if (data.user) set({ user: data.user });
           } catch (error) {
-            console.error('Error updating user avatar:', error);
+            console.error('Error updating user avatar:', error instanceof Error ? error.message : 'unknown error');
           }
         },
 
@@ -712,11 +740,15 @@ export const useStore = create<AppStore>()(
           if (!user) return;
           try {
             const newSettings = { ...settings, ...updates };
+            const { themeAccent, themeBg } = get();
             const { error } = await supabase.from('beautyos_settings').upsert({
               empresa_id: user.id,
               studio_name: newSettings.studioName,
               location: newSettings.location,
               currency: newSettings.currency,
+              business_type: newSettings.businessType,
+              theme_accent: themeAccent,
+              theme_bg: themeBg,
             });
             if (error) throw error;
             set({ settings: newSettings });
@@ -790,9 +822,10 @@ export const useStore = create<AppStore>()(
     {
       name: 'leshanot-storage',
       partialize: (state) => ({
-        clients: state.clients,
-        appointments: state.appointments,
-        transactions: state.transactions
+        themeAccent: state.themeAccent,
+        themeBg: state.themeBg,
+        hasChosenTheme: state.hasChosenTheme,
+        hasOnboarded: state.hasOnboarded,
       })
     }
   )
