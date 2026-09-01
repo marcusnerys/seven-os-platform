@@ -15,8 +15,10 @@ export function VoiceAssistant() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastCommand, setLastCommand] = useState('');
   const [debugLogs, setDebugLogs] = useState<{ label: string, value: any }[]>([]);
+  const [routineInsight, setRoutineInsight] = useState<string | null>(null);
+  const [isLoadingInsight, setIsLoadingInsight] = useState(false);
   const recognitionRef = React.useRef<any>(null);
-  const { parseCommand, executeCommand } = useVoiceAssistant();
+  const { parseCommand, executeCommand, getRoutineInsight } = useVoiceAssistant();
 
   const addDebugLog = (label: string, value: any) => {
     setDebugLogs(prev => [...prev.slice(-4), { label, value }]);
@@ -27,6 +29,19 @@ export function VoiceAssistant() {
       startListening();
     }
   }, [isVoiceActive, isProcessing]);
+
+  useEffect(() => {
+    if (isVoiceActive && !routineInsight && !isLoadingInsight) {
+      setIsLoadingInsight(true);
+      getRoutineInsight().then(insight => {
+        setRoutineInsight(insight);
+        setIsLoadingInsight(false);
+      });
+    }
+    if (!isVoiceActive) {
+      setRoutineInsight(null);
+    }
+  }, [isVoiceActive]);
 
   const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -237,15 +252,47 @@ export function VoiceAssistant() {
                 </AnimatePresence>
               </div>
 
+              {/* Routine Insight Card */}
+              {(routineInsight || isLoadingInsight) && !isProcessing && !result && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-2 p-4 rounded-2xl bg-ios-gold/10 border border-ios-gold/20 text-left"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles size={12} className="text-ios-gold" />
+                    <span className="text-[10px] font-bold text-ios-gold uppercase tracking-widest">IA — Rotina do Dia</span>
+                  </div>
+                  {isLoadingInsight ? (
+                    <div className="flex gap-1">
+                      {[0,1,2].map(i => (
+                        <motion.div key={i} animate={{ opacity: [0.3,1,0.3] }} transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
+                          className="w-1.5 h-1.5 rounded-full bg-ios-gold" />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-white/80 leading-relaxed">{routineInsight}</p>
+                  )}
+                </motion.div>
+              )}
+
               {!isProcessing && !result && (
-                <div className="mt-8 flex flex-col gap-4">
+                <div className="mt-4 flex flex-col gap-3">
                   <p className="text-[11px] font-bold text-ios-text-secondary uppercase tracking-[1.5px] opacity-40">Tente dizer:</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {[
                       "Agendar Ana amanhã 14h",
-                      "Registrar venda de 150 reais",
-                      "Ver agenda",
-                      "Adicionar despesa"
+                      "Registrar venda de 200 reais",
+                      "Adicionar despesa de 50 reais",
+                      "Ver agenda de hoje",
+                      "Cadastrar nova cliente",
+                      "Cancelar agendamento da Maria",
+                      "Resumo financeiro do mês",
+                      "Clientes inativas",
+                      "Mandar WhatsApp para Ana",
+                      "Promover Joana para VIP",
+                      "Criar serviço Extensão de Cílios",
+                      "Ver dashboard",
                     ].map((tip, i) => (
                       <span key={i} className="px-3 py-1.5 rounded-full bg-white/5 text-[11px] font-medium text-white/60 border border-white/5">
                         "{tip}"

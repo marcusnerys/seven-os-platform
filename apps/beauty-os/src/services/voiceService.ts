@@ -1,13 +1,62 @@
 import { useStore } from '../lib/store';
 
 export interface VoiceCommandResult {
-  action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip'| 'create_service' | 'get_daily_summary' | 'unknown';
+  action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip' | 'create_service' | 'get_daily_summary' | 'show_financial_summary' | 'list_inactive_clients' | 'unknown';
   data?: any;
   message: string;
   status: 'complete' | 'incomplete';
 }
 
 export function useVoiceAssistant() {
+  const getRoutineInsight = async (): Promise<string> => {
+    const store = useStore.getState();
+    const today = new Date().toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const todayAppointments = store.appointments
+      .filter(a => a.date === today && a.status !== 'Cancelado')
+      .map(a => ({ name: a.clientName, time: a.time, service: a.service }));
+
+    const inactiveClients = store.clients
+      .filter(c => c.lastVisit && c.lastVisit < thirtyDaysAgo)
+      .map(c => c.name);
+
+    const recentRevenue = store.transactions
+      .filter(t => t.type === 'revenue' && t.date >= sevenDaysAgo)
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const recentExpenses = store.transactions
+      .filter(t => t.type === 'expense' && t.date >= sevenDaysAgo)
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    try {
+      const response = await fetch('/api/voice/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'insight',
+          storeSnapshot: {
+            todayAppointments,
+            inactiveClients,
+            recentRevenue,
+            recentExpenses,
+            totalClients: store.clients.length,
+          },
+        }),
+      });
+
+      if (!response.ok) throw new Error('API failed');
+      const data = await response.json();
+      return data.insight || 'Tudo pronto para o dia. Como posso ajudar?';
+    } catch {
+      if (todayAppointments.length > 0) {
+        return `Você tem ${todayAppointments.length} agendamento${todayAppointments.length > 1 ? 's' : ''} hoje. Como posso ajudar?`;
+      }
+      return 'Olá! Agenda livre hoje. Como posso ajudar?';
+    }
+  };
+
   const parseCommand = async (text: string): Promise<VoiceCommandResult> => {
     const store = useStore.getState();
     try {
@@ -177,6 +226,36 @@ export function useVoiceAssistant() {
         store.setActiveTab('clients');
         break;
 
+      case 'show_financial_summary': {
+        const today = new Date().toISOString().split('T')[0];
+        const monthStart = today.substring(0, 7) + '-01';
+        const monthRevenue = store.transactions
+          .filter(t => t.type === 'revenue' && t.date >= monthStart)
+          .reduce((sum, t) => sum + t.amount, 0);
+        const monthExpenses = store.transactions
+          .filter(t => t.type === 'expense' && t.date >= monthStart)
+          .reduce((sum, t) => sum + t.amount, 0);
+        store.setToast({
+          message: `Este mês: Receitas R$ ${monthRevenue.toFixed(2)} | Despesas R$ ${monthExpenses.toFixed(2)} | Lucro R$ ${(monthRevenue - monthExpenses).toFixed(2)}`,
+          type: 'success'
+        });
+        store.setActiveTab('financial');
+        break;
+      }
+
+      case 'list_inactive_clients': {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const inactive = store.clients.filter(c => c.lastVisit && c.lastVisit < thirtyDaysAgo);
+        store.setToast({
+          message: inactive.length > 0
+            ? `${inactive.length} cliente${inactive.length > 1 ? 's' : ''} sem visita há mais de 30 dias: ${inactive.slice(0, 3).map(c => c.name).join(', ')}${inactive.length > 3 ? '...' : ''}`
+            : 'Nenhuma cliente inativa no momento.',
+          type: 'success'
+        });
+        store.setActiveTab('clients');
+        break;
+      }
+
       case 'update_client_notes': {
         const { clientName, notes } = data;
         if (!clientName || !notes) break;
@@ -214,5 +293,5 @@ export function useVoiceAssistant() {
     }
   };
 
-  return { parseCommand, executeCommand };
+  return { parseCommand, executeCommand, getRoutineInsight };
 }
