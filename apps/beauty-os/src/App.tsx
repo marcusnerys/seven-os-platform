@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import BottomNav from './components/BottomNav';
 import Dashboard from './screens/Dashboard';
@@ -17,10 +17,13 @@ import Login from './screens/Login';
 import BookingPage from './screens/BookingPage';
 import { AutomationService } from './components/AutomationService';
 import { VoiceAssistant } from './components/VoiceAssistant';
-import { Battery, Wifi, Signal } from 'lucide-react';
 import { useStore } from './lib/store';
 import { Toast, PWAInstallPrompt } from './components/UI';
 import DevTools from './screens/DevTools';
+import { Onboarding, applyTheme } from './components/ThemeOnboarding';
+import { getVertical } from './lib/vertical';
+
+const ADMIN_EMAIL = 'leshanot.meunegocio@gmail.com';
 
 export default function App() {
   const activeTab = useStore(state => state.activeTab);
@@ -31,7 +34,25 @@ export default function App() {
   const showDevTools = useStore(state => state.showDevTools);
   const setShowDevTools = useStore(state => state.setShowDevTools);
   const setToast = useStore(state => state.setToast);
+  const themeAccent = useStore(state => state.themeAccent);
+  const themeBg = useStore(state => state.themeBg);
+  const hasOnboarded = useStore(state => state.hasOnboarded);
+  const settings = useStore(state => state.settings);
+  const vertical = getVertical(settings.businessType);
   const location = useLocation();
+
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
+  useEffect(() => {
+    applyTheme(themeAccent, themeBg);
+  }, [themeAccent, themeBg]);
+
+  // Verticais sem agendamento (ex: financas pessoais) nao tem aba Agenda.
+  useEffect(() => {
+    if (!vertical.hasScheduling && (activeTab === 'agenda' || activeTab === 'automation')) {
+      setActiveTab('dashboard');
+    }
+  }, [vertical.hasScheduling, activeTab, setActiveTab]);
 
   const isPublicRoute = location.pathname.startsWith('/book/');
 
@@ -56,25 +77,7 @@ export default function App() {
   }
 
   return (
-    <div className="relative h-screen w-full bg-[#050505] selection:bg-ios-gold/30 flex items-center justify-center p-4">
-      {/* Mobile Wrapper (Simulates iPhone constraint if viewport is large) */}
-      <div className="relative w-full h-full max-w-[390px] max-h-[844px] bg-ios-bg overflow-hidden flex flex-col shadow-[0_0_0_10px_#1a1a1d,0_32px_64px_-16px_rgba(0,0,0,0.8)] rounded-[50px] border border-white/5 transition-all duration-500 ease-in-out">
-        
-        {/* iOS Status Bar Simulation */}
-        <div className="flex items-center justify-between px-8 py-4 pt-6 text-white pointer-events-none z-50">
-          <span className="text-[12px] font-bold tracking-tightest">9:41</span>
-          <div className="flex items-center gap-1.5 opacity-80">
-            <Signal size={14} strokeWidth={2.5} />
-            <Wifi size={14} strokeWidth={2.5} />
-            <div className="relative w-5 h-2.5 border border-white/30 rounded-[3px] flex items-center p-[1px]">
-              <div className="w-[14px] h-full bg-white rounded-sm" />
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Notch (Sleek) */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-b-[18px] z-40 border-x border-b border-white/5" />
-
+    <div className="relative h-screen w-full bg-ios-bg selection:bg-ios-gold/30 overflow-hidden flex flex-col">
         {/* Screen Content */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           <main className="flex-1 overflow-hidden relative">
@@ -119,10 +122,16 @@ export default function App() {
         {user && <AutomationService />}
         {user && <VoiceAssistant />}
 
+        {/* Theme onboarding — shown to authenticated users who haven't chosen a theme yet */}
+        <AnimatePresence>
+          {user && !hasOnboarded && <Onboarding />}
+        </AnimatePresence>
+
         <PWAInstallPrompt />
 
+        {/* DevTools only for admin account */}
         <AnimatePresence>
-          {showDevTools && <DevTools onClose={() => setShowDevTools(false)} />}
+          {showDevTools && isAdmin && <DevTools onClose={() => setShowDevTools(false)} />}
         </AnimatePresence>
 
         {toast && (
@@ -134,9 +143,6 @@ export default function App() {
           />
         )}
 
-        {/* iOS Home Indicator */}
-        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-20 h-1 bg-white/20 rounded-full z-50 pointer-events-none" />
-      </div>
     </div>
   );
 }
