@@ -738,8 +738,14 @@ export const useStore = create<AppStore>()(
         updateSettings: async (updates) => {
           const { user, settings } = get();
           if (!user) return;
+          const newSettings = { ...settings, ...updates };
+
+          // Aplica localmente antes de sincronizar: se a gravação falhar, a
+          // tela ainda reflete o que o usuário escolheu, em vez de reverter
+          // silenciosamente para o valor antigo.
+          set({ settings: newSettings });
+
           try {
-            const newSettings = { ...settings, ...updates };
             const { themeAccent, themeBg } = get();
             const { error } = await supabase.from('beautyos_settings').upsert({
               empresa_id: user.id,
@@ -751,7 +757,6 @@ export const useStore = create<AppStore>()(
               theme_bg: themeBg,
             });
             if (error) throw error;
-            set({ settings: newSettings });
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, 'beautyos_settings');
           }

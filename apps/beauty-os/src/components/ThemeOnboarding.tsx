@@ -50,6 +50,7 @@ export function Onboarding() {
   const setHasChosenTheme = useStore(state => state.setHasChosenTheme);
   const setHasOnboarded = useStore(state => state.setHasOnboarded);
   const updateSettings = useStore(state => state.updateSettings);
+  const setToast = useStore(state => state.setToast);
   const settings = useStore(state => state.settings);
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -85,9 +86,18 @@ export function Onboarding() {
     try {
       setTheme(selectedAccent, selectedBg);
       await updateSettings({ studioName: businessName.trim(), businessType });
+    } catch (error) {
+      // Uma falha de gravação não pode prender o usuário na última tela do
+      // onboarding. As escolhas já ficaram aplicadas localmente, então o app
+      // abre normalmente e avisamos que a sincronização não foi.
+      console.error('Onboarding: falha ao sincronizar configurações', error);
+      setToast({
+        message: 'Não deu para salvar no servidor. Suas escolhas valem neste aparelho — revise em Mais → Configurações.',
+        type: 'error',
+      });
+    } finally {
       setHasChosenTheme(true);
       setHasOnboarded(true);
-    } finally {
       setSaving(false);
     }
   };
