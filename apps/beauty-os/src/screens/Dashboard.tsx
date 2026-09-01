@@ -1,17 +1,25 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GlassCard, StatusBadge, Avatar, Modal, Button } from '../components/UI';
+import { GlassCard, StatusBadge, Avatar, Modal, Button, Toast } from '../components/UI';
 import { Logo } from '../components/Logo';
-import { TrendingUp, Users, DollarSign, Calendar, ChevronRight, UserPlus, PlusCircle, Gift, MessageCircle, Bell, Lightbulb, Sparkles, Camera } from 'lucide-react';
+import { TrendingUp, Users, DollarSign, Calendar, ChevronRight, UserPlus, PlusCircle, Gift, MessageCircle, Bell, Lightbulb, Sparkles, Camera, RotateCw, Wind, Droplets } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/store';
+import { useWeather } from '../hooks/useWeather';
 
 export default function Dashboard() {
   const { setActiveTab, setModalToOpen, updateUserAvatar, getRevenueData, getRevenueForecast, getSmartInsight, clients, appointments, transactions, user, notifications, markNotificationAsRead, automationTemplates, setShowDevTools } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [localToast, setLocalToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    window.location.reload();
+  };
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const startLongPress = () => {
@@ -27,6 +35,7 @@ export default function Dashboard() {
     }
   };
 
+  const { weather, loading: weatherLoading } = useWeather();
   const unreadCount = notifications.filter(n => !n.read).length;
   const revenueForecast = getRevenueForecast();
 
@@ -38,8 +47,8 @@ export default function Dashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 1024 * 1024) { // Limit to 1MB
-      alert('A imagem deve ter menos de 1MB');
+    if (file.size > 5 * 1024 * 1024) {
+      setLocalToast({ message: 'A imagem deve ter menos de 5MB', type: 'error' });
       return;
     }
 
@@ -151,13 +160,22 @@ export default function Dashboard() {
       <div className="flex flex-col mt-2 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-[11px] font-medium text-ios-text-secondary">Bem-vinda de volta,</span>
+            <span className="text-[11px] font-medium text-ios-text-secondary">Bem-vindo(a) de volta,</span>
             <h2 className="text-[20px] font-bold tracking-tightest text-white">
               {user?.user_metadata?.full_name || 'Studio'} ✨
             </h2>
           </div>
           <div className="flex items-center gap-3">
-            <button 
+            <button
+              onClick={handleRefresh}
+              title="Atualizar dados (F5)"
+              className="p-2 rounded-full bg-white/5 border border-white/5 text-ios-text-secondary active:scale-95 transition-transform"
+            >
+              <motion.div animate={{ rotate: isRefreshing ? 360 : 0 }} transition={{ duration: 0.6 }}>
+                <RotateCw size={18} />
+              </motion.div>
+            </button>
+            <button
               onClick={() => setIsNotificationsOpen(true)}
               className="relative p-2 rounded-full bg-white/5 border border-white/5 text-ios-text-secondary active:scale-95 transition-transform"
             >
@@ -187,6 +205,70 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Weather Card */}
+      <AnimatePresence>
+        {(weather || weatherLoading) && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <GlassCard className="p-4 bg-white/[0.03] border-white/5 shrink-0 overflow-hidden relative">
+              {weatherLoading ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-white/5 animate-pulse" />
+                  <div className="flex flex-col gap-1.5 flex-1">
+                    <div className="h-3 w-24 bg-white/5 rounded-full animate-pulse" />
+                    <div className="h-2 w-40 bg-white/5 rounded-full animate-pulse" />
+                  </div>
+                </div>
+              ) : weather ? (
+                <>
+                  {/* Subtle ambient glow */}
+                  <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full opacity-10 blur-3xl"
+                    style={{ background: weather.temp >= 26 ? '#FF9500' : weather.temp <= 16 ? '#00E6FF' : '#D4AF37' }}
+                  />
+                  <div className="flex items-center justify-between relative z-10">
+                    {/* Left: emoji + temp + city */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-[36px] leading-none select-none">{weather.emoji}</span>
+                      <div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-[28px] font-black text-white tracking-tighter leading-none">
+                            {weather.temp}°
+                          </span>
+                          <span className="text-[13px] font-medium text-ios-text-secondary">C</span>
+                        </div>
+                        <p className="text-[11px] text-ios-text-secondary font-medium leading-tight">
+                          {weather.condition} · {weather.city}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Right: humidity + wind */}
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] text-ios-text-secondary">
+                        <Droplets size={12} className="text-ios-cyan" />
+                        <span>{weather.humidity}%</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-ios-text-secondary">
+                        <Wind size={12} className="text-ios-gold" />
+                        <span>{weather.windspeed} km/h</span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Beauty tip */}
+                  <div className="mt-3 pt-3 border-t border-white/5 flex items-start gap-2 relative z-10">
+                    <Sparkles size={11} className="text-ios-gold shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-ios-text-secondary leading-snug">{weather.tip}</p>
+                  </div>
+                </>
+              ) : null}
+            </GlassCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Bible Verse Card */}
       <GlassCard className="p-5 bg-white/[0.03] border-white/5 flex items-start gap-4 min-h-[160px] shrink-0">
         <div className="w-12 h-12 rounded-[18px] bg-ios-gold/10 flex items-center justify-center text-ios-gold shrink-0 border border-ios-gold/20 shadow-[0_0_20px_rgba(230,192,139,0.1)]">
@@ -195,7 +277,7 @@ export default function Dashboard() {
         <div className="flex flex-col flex-1 min-w-0 h-full">
           <span className="text-[10px] font-bold text-ios-gold uppercase tracking-[1.2px] opacity-70 mb-2">Palavra de Fé</span>
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar max-h-[80px]">
-            <p className="text-[15px] text-white/90 leading-[1.6] font-medium tracking-tight">
+            <p className="text-[15px] text-ios-text-primary leading-[1.6] font-medium tracking-tight">
               "{verse.text}"
             </p>
           </div>
@@ -378,6 +460,13 @@ export default function Dashboard() {
           )}
         </div>
       </Modal>
+
+      <Toast
+        isVisible={!!localToast}
+        message={localToast?.message || ''}
+        type={localToast?.type}
+        onClose={() => setLocalToast(null)}
+      />
     </div>
   );
 }
