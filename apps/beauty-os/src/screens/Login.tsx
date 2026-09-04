@@ -29,10 +29,29 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await supabase.auth.signUp({ email, password });
+    setSuccess('');
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      // Sem isto o link de confirmação aponta para a Site URL do projeto,
+      // que pode não ser o endereço onde o app está publicado.
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    });
+
     if (error) {
       setError(error.message.includes('already registered') ? 'Este e-mail já está em uso.' : 'Erro ao criar conta. Tente novamente.');
+    } else if (data.user && data.user.identities?.length === 0) {
+      // O Supabase responde sucesso com identities vazio quando o e-mail já
+      // está cadastrado, para não revelar quais endereços existem. Sem tratar
+      // esse caso, a tela ficava muda e parecia que o e-mail não fora enviado.
+      setError('Este e-mail já está em uso.');
+    } else if (data.session) {
+      setSuccess('Conta criada com sucesso!');
+    } else {
+      setSuccess(`Enviamos um link de confirmação para ${email}. Confira a caixa de entrada e o spam.`);
     }
+
     setLoading(false);
   };
 
