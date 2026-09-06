@@ -15,7 +15,9 @@ import {
   MessageCircle,
   Camera,
   RefreshCw,
-  Tag
+  Tag,
+  Users,
+  CalendarDays
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { applyTheme } from '../components/ThemeOnboarding';
@@ -44,6 +46,9 @@ export default function More() {
   const deleteService = useStore(state => state.deleteService);
   const settings = useStore(state => state.settings);
   const updateSettings = useStore(state => state.updateSettings);
+  const clients = useStore(state => state.clients);
+  const addClient = useStore(state => state.addClient);
+  const appointments = useStore(state => state.appointments);
   
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   
@@ -88,6 +93,76 @@ export default function More() {
 
   const [newService, setNewService] = useState({ name: '', price: 0, duration: 60 });
   const [editSettings, setEditSettings] = useState(settings);
+
+  const importPhoneContacts = async () => {
+    const nav = navigator as any;
+    if (!('contacts' in nav) || !('ContactsManager' in window)) {
+      setToast({ message: 'Sincronização de contatos disponível apenas no navegador móvel (Chrome Android)', type: 'error' });
+      return;
+    }
+    try {
+      setLoadingAction('import-contacts');
+      const picked = await nav.contacts.select(['name', 'tel', 'email'], { multiple: true });
+      if (!picked || picked.length === 0) return;
+      let added = 0;
+      for (const c of picked) {
+        const name = c.name?.[0] || '';
+        const phone = (c.tel?.[0] || '').replace(/\D/g, '');
+        const email = c.email?.[0] || '';
+        if (!name) continue;
+        const alreadyExists = clients.some(cl => cl.phone && cl.phone === phone);
+        if (alreadyExists) continue;
+        await addClient({ name, phone, email, tags: ['Importado'], isVIP: false, isFavorite: false });
+        added++;
+      }
+      setToast({ message: added > 0 ? `${added} contato${added > 1 ? 's' : ''} importado${added > 1 ? 's' : ''}` : 'Nenhum contato novo para importar', type: 'success' });
+    } catch (err: any) {
+      if (err?.name !== 'TypeError') {
+        setToast({ message: 'Erro ao importar contatos', type: 'error' });
+      }
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const exportCalendar = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const upcoming = appointments.filter(a => a.date >= today && a.status !== 'Cancelado');
+    if (upcoming.length === 0) {
+      setToast({ message: 'Nenhum agendamento futuro para exportar', type: 'error' });
+      return;
+    }
+    const pad = (n: string) => n.padStart(2, '0');
+    const events = upcoming.map(appt => {
+      const [y, m, d] = appt.date.split('-');
+      const [h, min] = appt.time.split(':');
+      const dtStart = `${y}${pad(m)}${pad(d)}T${pad(h)}${pad(min)}00`;
+      const endMin = Number(h) * 60 + Number(min) + (appt.duration || 60);
+      const endH = String(Math.floor(endMin / 60) % 24).padStart(2, '0');
+      const endM = String(endMin % 60).padStart(2, '0');
+      const dtEnd = `${y}${pad(m)}${pad(d)}T${endH}${endM}00`;
+      const clientName = appt.clientName || clients.find(c => c.id === appt.clientId)?.name || 'Cliente';
+      return [
+        'BEGIN:VEVENT',
+        `DTSTART:${dtStart}`,
+        `DTEND:${dtEnd}`,
+        `SUMMARY:${appt.service} - ${clientName}`,
+        `DESCRIPTION:Serviço: ${appt.service}\\nCliente: ${clientName}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}`,
+        `STATUS:CONFIRMED`,
+        `UID:${appt.id}@leshanotos`,
+        'END:VEVENT',
+      ].join('\r\n');
+    });
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Leshanot OS//Agenda//PT', ...events, 'END:VCALENDAR'].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agenda-${today}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setToast({ message: `${upcoming.length} agendamento${upcoming.length > 1 ? 's' : ''} exportado${upcoming.length > 1 ? 's' : ''} para calendário`, type: 'success' });
+  };
 
   useEffect(() => {
     setEditSettings(settings);
@@ -147,8 +222,19 @@ export default function More() {
       title: 'Negócio',
       items: [
         { label: vertical.serviceNounPlural, icon: Tag, color: 'text-ios-gold', action: () => setIsServicesOpen(true), badge: services.length.toString() },
-        { label: 'Link de Agendamento', icon: Globe, color: 'text-ios-cyan', action: openInAppBrowser },
-        { label: 'Automação WhatsApp', icon: MessageCircle, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('automation') },
+        ...(vertical.hasScheduling ? [
+          { label: 'Link de Agendamento', icon: Globe, color: 'text-ios-cyan', action: openInAppBrowser },
+          { label: 'Automação WhatsApp', icon: MessageCircle, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('automation') },
+        ] : []),
+      ]
+    },
+    {
+      title: 'Ferramentas',
+      items: [
+        { label: 'Importar Contatos do Celular', icon: Users, color: 'text-ios-cyan', action: importPhoneContacts },
+        ...(vertical.hasScheduling ? [
+          { label: 'Exportar Agenda p/ Calendário', icon: CalendarDays, color: 'text-ios-gold', action: exportCalendar, badge: String(appointments.filter(a => a.date >= new Date().toISOString().split('T')[0] && a.status !== 'Cancelado').length) },
+        ] : []),
       ]
     },
     {
