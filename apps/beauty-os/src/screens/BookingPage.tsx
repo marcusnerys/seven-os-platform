@@ -227,13 +227,9 @@ export default function BookingPage() {
         setToast({ message: 'Muitas tentativas. Aguarde um pouco e tente novamente.', type: 'error' });
         return;
       }
-      await supabase.from('beautyos_notifications').insert({
-        empresa_id: userId,
-        title: 'Nova reserva recebida',
-        message: `${selectedService.name} • ${selectedTime}\nCliente: ${clientInfo.name}`,
-        type: 'booking',
-        read: false,
-      });
+      // A notificação ao dono é criada dentro da própria RPC. Fazê-la aqui
+      // exigiria dar escrita anônima em beautyos_notifications, que era
+      // justamente a brecha fechada na migration 0009.
       localStorage.setItem(`booking_cooldown_${userId}`, String(Date.now()));
       setIsSuccess(true);
     } catch {
