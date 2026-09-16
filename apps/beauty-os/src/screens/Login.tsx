@@ -13,14 +13,42 @@ export default function Login() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
+    setNeedsConfirmation(false);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setError('E-mail ou senha incorretos.');
+      // Sem separar este caso, quem ainda não clicou no link de confirmação
+      // recebe "senha incorreta" e fica tentando redefinir uma senha que está
+      // certa. O código vem como email_not_confirmed.
+      if (error.code === 'email_not_confirmed' || error.message.toLowerCase().includes('not confirmed')) {
+        setNeedsConfirmation(true);
+        setError('Sua conta ainda não foi confirmada. Procure o e-mail que enviamos (veja também o spam).');
+      } else {
+        setError('E-mail ou senha incorretos.');
+      }
+    }
+    setLoading(false);
+  };
+
+  const handleResendConfirmation = async () => {
+    setLoading(true);
+    setError('');
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    });
+    if (error) {
+      setError('Não foi possível reenviar agora. Tente de novo em alguns minutos.');
+    } else {
+      setNeedsConfirmation(false);
+      setSuccess(`Reenviamos o link de confirmação para ${email}.`);
     }
     setLoading(false);
   };
@@ -176,6 +204,15 @@ export default function Login() {
                   )}
 
                   {error && <p className="text-[12px] text-red-400 px-1">{error}</p>}
+                  {needsConfirmation && (
+                    <button
+                      type="button"
+                      onClick={handleResendConfirmation}
+                      className="text-[12px] font-bold text-ios-gold text-left px-1 underline underline-offset-2"
+                    >
+                      Reenviar link de confirmação
+                    </button>
+                  )}
                   {success && <p className="text-[12px] text-ios-cyan px-1">{success}</p>}
 
                   <Button type="submit" loading={loading} className="w-full h-14 mt-2">
