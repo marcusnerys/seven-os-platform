@@ -1,4 +1,5 @@
 import { useStore } from '../lib/store';
+import { dataLocal } from '../lib/utils';
 
 export interface VoiceCommandResult {
   action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip' | 'create_service' | 'get_daily_summary' | 'show_financial_summary' | 'list_inactive_clients' | 'unknown';
@@ -10,9 +11,9 @@ export interface VoiceCommandResult {
 export function useVoiceAssistant() {
   const getRoutineInsight = async (): Promise<string> => {
     const store = useStore.getState();
-    const today = new Date().toISOString().split('T')[0];
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const today = dataLocal();
+    const sevenDaysAgo = dataLocal(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+    const thirtyDaysAgo = dataLocal(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
     const todayAppointments = store.appointments
       .filter(a => a.date === today && a.status !== 'Cancelado')
@@ -64,7 +65,7 @@ export function useVoiceAssistant() {
         currentTab: store.activeTab,
         clientNames: store.clients.map(c => c.name),
         serviceNames: store.services.map(s => s.name),
-        today: new Date().toISOString().split('T')[0],
+        today: dataLocal(),
       };
 
       const response = await fetch("/api/voice/parse", {
@@ -161,7 +162,7 @@ export function useVoiceAssistant() {
           amount: Number(amount),
           type: 'revenue',
           category: 'Venda (AI)',
-          date: new Date().toISOString().split('T')[0],
+          date: dataLocal(),
           description: description || 'Registrado via assistente operational'
         });
         store.setActiveTab('financial');
@@ -175,7 +176,7 @@ export function useVoiceAssistant() {
           amount: Number(amount),
           type: 'expense',
           category: category || 'Geral (Assistente)',
-          date: new Date().toISOString().split('T')[0],
+          date: dataLocal(),
           description: description || 'Despesa registrada via voz'
         });
         store.setActiveTab('financial');
@@ -207,7 +208,7 @@ export function useVoiceAssistant() {
       }
 
       case 'get_daily_summary': {
-        const today = new Date().toISOString().split('T')[0];
+        const today = dataLocal();
         const todayAppts = store.appointments.filter(a => a.date === today && a.status !== 'Cancelado');
         const revenue = store.transactions
           .filter(t => t.date === today && t.type === 'revenue')
@@ -227,7 +228,7 @@ export function useVoiceAssistant() {
         break;
 
       case 'show_financial_summary': {
-        const today = new Date().toISOString().split('T')[0];
+        const today = dataLocal();
         const monthStart = today.substring(0, 7) + '-01';
         const monthRevenue = store.transactions
           .filter(t => t.type === 'revenue' && t.date >= monthStart)
@@ -244,7 +245,7 @@ export function useVoiceAssistant() {
       }
 
       case 'list_inactive_clients': {
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const thirtyDaysAgo = dataLocal(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
         const inactive = store.clients.filter(c => c.lastVisit && c.lastVisit < thirtyDaysAgo);
         store.setToast({
           message: inactive.length > 0

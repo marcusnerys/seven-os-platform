@@ -5,6 +5,7 @@ import { supabase, OperationType, handleSupabaseError } from './supabase';
 import { logger } from './qa/logger';
 import { perfMonitor } from './qa/performance';
 import type { BusinessType } from './vertical';
+import { dataLocal } from './utils';
 
 export type AppointmentStatus = 'Confirmado' | 'Pendente' | 'Cancelado' | 'Concluído';
 
@@ -362,7 +363,7 @@ export const useStore = create<AppStore>()(
               notes: client.notes ?? null,
               spent: 0,
               visits: 0,
-              last_visit: new Date().toISOString().split('T')[0],
+              last_visit: dataLocal(),
               is_vip: false,
               is_favorite: false,
             });
@@ -791,7 +792,7 @@ export const useStore = create<AppStore>()(
 
         getRevenueForecast: () => {
           const appointments = get().appointments;
-          const today = new Date().toISOString().split('T')[0];
+          const today = dataLocal();
 
           return appointments
             .filter(a => a.date >= today && (a.status === 'Confirmado' || a.status === 'Pendente'))

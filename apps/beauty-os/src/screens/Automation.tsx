@@ -16,7 +16,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, dataLocal } from '../lib/utils';
 import { useStore, AutomationTemplate } from '../lib/store';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
@@ -39,8 +39,8 @@ export default function Automation() {
   const [campaignRecipients, setCampaignRecipients] = useState<Array<{ name: string; phone: string }>>([]);
   const [campaignStep, setCampaignStep] = useState<'compose' | 'recipients'>('compose');
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const todayStr = dataLocal();
+  const tomorrowStr = dataLocal(new Date(Date.now() + 86400000));
 
   const buildRecipients = () => {
     let phones = new Map<string, string>();

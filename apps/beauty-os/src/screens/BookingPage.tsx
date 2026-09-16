@@ -24,7 +24,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Button, Toast } from '../components/UI';
-import { cn } from '../lib/utils';
+import { cn, dataLocal } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────
@@ -162,7 +162,7 @@ export default function BookingPage() {
   // ── Fetch occupied slots ──
   useEffect(() => {
     if (!selectedDate || !userId) return;
-    const dateStr = selectedDate.toISOString().split('T')[0];
+    const dateStr = dataLocal(selectedDate);
     supabase.rpc('beautyos_public_slots', { p_empresa_id: userId, p_date: dateStr }).then(({ data }) => {
       setOccupiedSlots((data ?? []).map((r: any) => r.time));
     });
@@ -207,7 +207,7 @@ export default function BookingPage() {
     if (clientInfo.phone && !isPhoneValid(clientInfo.phone)) { setPhoneError(true); return; }
     setIsSubmitting(true);
     try {
-      const dateStr = selectedDate.toISOString().split('T')[0];
+      const dateStr = dataLocal(selectedDate);
       const { data: rpcResult, error: apptError } = await supabase.rpc(
         'beautyos_create_appointment_ratelimited',
         {

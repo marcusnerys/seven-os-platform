@@ -7,6 +7,8 @@
  * Limitação conhecida: lê texto impresso bem, manuscrito mal.
  */
 
+import { dataLocal } from './utils';
+
 export interface ParsedTransaction {
   date: string;
   description: string;
@@ -176,6 +178,6 @@ export async function readStatementWithOCR(
     },
   });
 
-  const todayISO = new Date().toISOString().split('T')[0];
+  const todayISO = dataLocal();
   return parseStatementText(data.text ?? '', todayISO);
 }

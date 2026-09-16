@@ -5,7 +5,7 @@ import { Logo } from '../components/Logo';
 import { TrendingUp, Users, DollarSign, Calendar, ChevronRight, UserPlus, PlusCircle, Gift, MessageCircle, Bell, Lightbulb, Sparkles, Camera, RotateCw, Wind, Droplets } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
-import { cn } from '../lib/utils';
+import { cn, dataLocal } from '../lib/utils';
 import { useStore } from '../lib/store';
 import { useWeather } from '../hooks/useWeather';
 
@@ -93,7 +93,7 @@ export default function Dashboard() {
   const revenueData = getRevenueData();
   const insight = getSmartInsight();
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = dataLocal(now);
   const currentMonthDay = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   
   const todayAppointments = appointments.filter(a => a.date === today);
@@ -107,7 +107,7 @@ export default function Dashboard() {
 
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowStr = dataLocal(tomorrow);
   const tomorrowAppointments = appointments.filter(a => a.date === tomorrowStr);
 
   const handleSendBirthday = (client: any) => {

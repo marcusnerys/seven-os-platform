@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input, Textarea } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { Plus, ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon, User, MessageCircle, Trash2, X, CalendarPlus, Download } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, dataLocal } from '../lib/utils';
 import { useStore, Appointment } from '../lib/store';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
@@ -15,7 +15,7 @@ export default function Agenda() {
   const textSecondary = isLight ? '#6B6B70' : '#8E8E93';
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [selectedFullDate, setSelectedFullDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedFullDate, setSelectedFullDate] = useState(dataLocal());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -151,7 +151,7 @@ export default function Agenda() {
   };
 
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = dataLocal(today);
   const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const weekDays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
@@ -672,7 +672,7 @@ export default function Agenda() {
                    type="date" 
                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none" 
                    value={newAppt.date}
-                   min={new Date().toISOString().split('T')[0]}
+                   min={dataLocal()}
                    onChange={e => setNewAppt({ ...newAppt, date: e.target.value })}
                  />
               </div>

@@ -4,7 +4,7 @@ import { GlassCard, Modal, Button, Toast, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { ChevronDown, Plus, Trash2, TrendingUp, TrendingDown, X, FileUp, CheckSquare, Square, Loader2 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, dataLocal } from '../lib/utils';
 import { useStore } from '../lib/store';
 import { readStatementWithOCR, type ParsedTransaction } from '../lib/ocr';
 import { getVertical } from '../lib/vertical';
@@ -43,7 +43,7 @@ export default function Financial() {
     amount: 0,
     type: 'revenue' as 'revenue' | 'expense',
     category: '',
-    date: new Date().toISOString().split('T')[0],
+    date: dataLocal(),
     description: ''
   });
 
@@ -145,7 +145,7 @@ export default function Financial() {
         amount: 0,
         type: activeSegment === 'despesas' ? 'expense' : 'revenue',
         category: '',
-        date: new Date().toISOString().split('T')[0],
+        date: dataLocal(),
         description: ''
       });
       setToast({ message: "Transação salva com sucesso", type: 'success' });

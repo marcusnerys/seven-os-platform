@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
+import { dataLocal } from '../lib/utils';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 import { Modal, Button } from './UI';
 import { Gift, MessageCircle, X } from 'lucide-react';
@@ -16,7 +17,7 @@ export function AutomationService() {
     const checkBirthdays = () => {
       const now = new Date();
       const currentMonthDay = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const todayStr = now.toISOString().split('T')[0];
+      const todayStr = dataLocal(now);
       const logKey = `birthday_${todayStr}`;
 
       // Check if already processed today
@@ -69,14 +70,14 @@ export function AutomationService() {
     }
 
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = dataLocal(now);
     await addAutomationLog(`birthday_${todayStr}`);
     setShowPrompt(false);
   };
 
   const handleDismiss = async () => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = dataLocal(now);
     await addAutomationLog(`birthday_${todayStr}`);
     setShowPrompt(false);
   };
