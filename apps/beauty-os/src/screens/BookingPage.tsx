@@ -223,8 +223,23 @@ export default function BookingPage() {
         }
       );
       if (apptError) throw apptError;
-      if ((rpcResult as any)?.error === 'rate_limit_phone' || (rpcResult as any)?.error === 'rate_limit_studio') {
-        setToast({ message: 'Muitas tentativas. Aguarde um pouco e tente novamente.', type: 'error' });
+      const falha = (rpcResult as any)?.error as string | undefined;
+      if (falha) {
+        const recados: Record<string, string> = {
+          rate_limit_phone: 'Muitas tentativas. Aguarde um pouco e tente novamente.',
+          rate_limit_studio: 'Muitas tentativas. Aguarde um pouco e tente novamente.',
+          horario_ocupado: 'Esse horário acabou de ser reservado por outra pessoa. Escolha outro.',
+          horario_no_passado: 'Esse horário já passou. Escolha uma data ou hora à frente.',
+          estudio_inexistente: 'Link de agendamento inválido. Peça o endereço novamente.',
+          duracao_invalida: 'Não foi possível agendar esse serviço. Fale com o estabelecimento.',
+        };
+        setToast({ message: recados[falha] ?? 'Não foi possível concluir a reserva. Tente novamente.', type: 'error' });
+        // Volta para a escolha de horário: insistir no mesmo slot ocupado
+        // recairia no mesmo erro.
+        if (falha === 'horario_ocupado' || falha === 'horario_no_passado') {
+          setSelectedTime('');
+          setStep(3);
+        }
         return;
       }
       // A notificação ao dono é criada dentro da própria RPC. Fazê-la aqui
