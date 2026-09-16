@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, ChangeEvent, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Calendar,
@@ -103,7 +103,11 @@ function makeColors(accent: string, bg: 'dark' | 'light') {
 
 // ─── Component ───────────────────────────────────────────
 export default function BookingPage() {
-  const { userId } = useParams();
+  // App.tsx renderiza esta tela fora de um <Route path="/book/:userId">, então
+  // useParams vem vazio e o id precisa sair do próprio caminho da URL.
+  const { userId: routeUserId } = useParams();
+  const { pathname } = useLocation();
+  const userId = routeUserId ?? pathname.split('/book/')[1]?.split(/[/?#]/)[0];
   const [step, setStep] = useState(1); // 1=Serviço, 2=Data, 3=Horário, 4=Dados
   const [studio, setStudio] = useState<StudioInfo>({
     studioName: 'Studio',
