@@ -19,7 +19,7 @@ import {
   Users,
   CalendarDays
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, dataLocal } from '../lib/utils';
 import { applyTheme } from '../components/ThemeOnboarding';
 
 import { supabase } from '../lib/supabase';
@@ -126,7 +126,7 @@ export default function More() {
   };
 
   const exportCalendar = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = dataLocal();
     const upcoming = appointments.filter(a => a.date >= today && a.status !== 'Cancelado');
     if (upcoming.length === 0) {
       setToast({ message: 'Nenhum agendamento futuro para exportar', type: 'error' });
@@ -233,7 +233,7 @@ export default function More() {
       items: [
         { label: 'Importar Contatos do Celular', icon: Users, color: 'text-ios-cyan', action: importPhoneContacts },
         ...(vertical.hasScheduling ? [
-          { label: 'Exportar Agenda p/ Calendário', icon: CalendarDays, color: 'text-ios-gold', action: exportCalendar, badge: String(appointments.filter(a => a.date >= new Date().toISOString().split('T')[0] && a.status !== 'Cancelado').length) },
+          { label: 'Exportar Agenda p/ Calendário', icon: CalendarDays, color: 'text-ios-gold', action: exportCalendar, badge: String(appointments.filter(a => a.date >= dataLocal() && a.status !== 'Cancelado').length) },
         ] : []),
       ]
     },
