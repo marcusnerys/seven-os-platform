@@ -42,4 +42,21 @@ assert.strictEqual(venda.date, '2026-08-30');
 assert.strictEqual(venda.amount, 450);
 assert.strictEqual(venda.type, 'revenue');
 
+// Milhar sem centavos. O extrato brasileiro escreve valor redondo como
+// "R$ 1.500", e ler isso como decimal erra o lançamento por um fator de mil:
+// um aluguel de mil e quinhentos reais entrava no Financeiro como um real.
+const milhar = [
+  ['05/09/2026  ALUGUEL DA SALA  R$ 1.500',     1500],
+  ['06/09/2026  COMPRA MATERIAL  R$ 2.350',     2350],
+  ['07/09/2026  NOTEBOOK NOVO    R$ 12.499,90', 12499.90],
+  ['08/09/2026  CAFE DA MANHA    R$ 8,50',      8.50],
+  ['09/09/2026  LANCHE RAPIDO    R$ 15',        15],
+];
+
+for (const [linha, esperado] of milhar) {
+  const [tx] = parseStatementText(linha, TODAY);
+  assert.ok(tx, `nao extraiu transacao de: ${linha}`);
+  assert.strictEqual(tx.amount, esperado, `${linha.trim()} -> esperado ${esperado}, veio ${tx.amount}`);
+}
+
 console.log('\nOK — parser passou em todos os asserts');

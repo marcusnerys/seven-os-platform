@@ -51,6 +51,11 @@ function parseAmount(raw: string): number | null {
     normalized = cleaned.replace(/\./g, '').replace(',', '.');
   } else if (hasComma) {
     normalized = cleaned.replace(',', '.');
+  } else if (hasDot && /^\d{1,3}(?:\.\d{3})+$/.test(cleaned)) {
+    // "1.500" e "12.499" são mil e quinhentos e doze mil, não 1,5 e 12,499.
+    // Extrato brasileiro escreve valor redondo sem centavos desse jeito, e
+    // lê-lo como decimal erra o lançamento por um fator de mil.
+    normalized = cleaned.replace(/\./g, '');
   } else {
     normalized = cleaned;
   }
@@ -115,8 +120,11 @@ export function parseStatementText(text: string, todayISO: string): ParsedTransa
     const moneyMatch =
       rest.match(/([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})+,\d{2})/) ||
       rest.match(/([+-]?\s*R?\$?\s*\d+,\d{2})/) ||
+      // Milhar sem centavos ("R$ 1.500"). Precisa vir antes do padrão de
+      // inteiro simples, senão aquele casa só o "1" e descarta o ".500".
+      rest.match(/([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})+(?!\d))/) ||
       rest.match(/([+-]?\s*R?\$?\s*\d+\.\d{2})\b/) ||
-      rest.match(/([+-]?\s*R\$\s*\d+)/);
+      rest.match(/([+-]?\s*R\$\s*\d+(?!\d))/);
 
     if (!moneyMatch) continue;
 
