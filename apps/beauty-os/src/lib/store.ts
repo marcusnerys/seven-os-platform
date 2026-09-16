@@ -178,6 +178,8 @@ interface AppStore {
   modalData: any | null;
   toast: { message: string, type: 'success' | 'error' } | null;
   isVoiceActive: boolean;
+  /** True enquanto o usuário veio de um link de recuperação e ainda não definiu a senha nova. */
+  isRecoveringPassword: boolean;
 
   themeAccent: string;
   themeBg: 'dark' | 'light';
@@ -191,6 +193,7 @@ interface AppStore {
   setModalToOpen: (modal: 'appointment' | 'client' | 'revenue' | 'expense' | null, data?: any) => void;
   setToast: (toast: { message: string, type: 'success' | 'error' } | null) => void;
   setIsVoiceActive: (active: boolean) => void;
+  setIsRecoveringPassword: (v: boolean) => void;
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
 
@@ -293,6 +296,10 @@ export const useStore = create<AppStore>()(
 
       supabase.auth.onAuthStateChange((_event, session) => {
         const user = session?.user ?? null;
+        // O link de recuperação autentica a pessoa e devolve ela ao app. Sem
+        // marcar esse estado, ela cairia direto no Dashboard e nunca chegaria
+        // a definir a senha nova — ficando trancada na próxima vez.
+        if (_event === 'PASSWORD_RECOVERY') set({ isRecoveringPassword: true });
         set({ user, loading: false });
         if (user) {
           startListeners(user.id);
@@ -325,6 +332,7 @@ export const useStore = create<AppStore>()(
         showDevTools: false,
         setShowDevTools: (show) => set({ showDevTools: show }),
         isVoiceActive: false,
+        isRecoveringPassword: false,
         themeAccent: '#D4AF37',
         themeBg: 'dark',
         hasChosenTheme: false,
@@ -344,6 +352,7 @@ export const useStore = create<AppStore>()(
         setHasOnboarded: (v) => set({ hasOnboarded: v }),
         setToast: (toast) => set({ toast }),
         setIsVoiceActive: (active) => set({ isVoiceActive: active }),
+        setIsRecoveringPassword: (v) => set({ isRecoveringPassword: v }),
 
         setActiveTab: (tab) => set({ activeTab: tab }),
         setModalToOpen: (modal, data = null) => set({ modalToOpen: modal, modalData: data }),

@@ -88,7 +88,9 @@ export default function Login() {
     setLoading(true);
     setError('');
     setSuccess('');
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    });
     if (error) {
       setError('Erro ao enviar e-mail. Verifique o endereço.');
     } else {

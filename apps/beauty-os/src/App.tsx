@@ -14,6 +14,7 @@ import Clients from './screens/Clients';
 import More from './screens/More';
 import Automation from './screens/Automation';
 import Login from './screens/Login';
+import NewPassword from './screens/NewPassword';
 import BookingPage from './screens/BookingPage';
 import { AutomationService } from './components/AutomationService';
 import { VoiceAssistant } from './components/VoiceAssistant';
@@ -37,6 +38,7 @@ export default function App() {
   const themeAccent = useStore(state => state.themeAccent);
   const themeBg = useStore(state => state.themeBg);
   const hasOnboarded = useStore(state => state.hasOnboarded);
+  const isRecoveringPassword = useStore(state => state.isRecoveringPassword);
   const settings = useStore(state => state.settings);
   const vertical = getVertical(settings.businessType);
   const location = useLocation();
@@ -74,6 +76,12 @@ export default function App() {
         <BookingPage />
       </div>
     );
+  }
+
+  // Quem chega pelo link de recuperação já vem autenticado. Sem esta parada
+  // a pessoa cairia no Dashboard sem nunca definir a senha nova.
+  if (isRecoveringPassword) {
+    return <NewPassword />;
   }
 
   return (
