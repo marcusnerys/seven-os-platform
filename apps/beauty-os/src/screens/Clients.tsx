@@ -5,11 +5,20 @@ import { Logo } from '../components/Logo';
 import { Search, Plus, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore, Client } from '../lib/store';
+import { getVertical } from '../lib/vertical';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
 export default function Clients() {
   const { clients, toggleFavorite, addClient, updateClient, deleteClient, modalToOpen, modalData, setModalToOpen, automationTemplates } = useStore();
   const settings = useStore(state => state.settings);
+  const vertical = getVertical(settings.businessType);
+  // O app falava sempre no feminino ("Nenhuma cliente", "Favoritas"), o que
+  // soa como salão numa oficina. A vertical diz o gênero de quem é atendido.
+  const fem = vertical.clientGender === 'f';
+  const artigoUm = fem ? 'uma' : 'um';
+  const nenhum = fem ? 'Nenhuma' : 'Nenhum';
+  const primeiro = fem ? 'primeira' : 'primeiro';
+  const cliente = vertical.clientNoun.toLowerCase();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'favorite' | 'vip'>('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -142,7 +151,7 @@ export default function Clients() {
           birthDate: newClient.birthDate || '',
           tags: newClient.tags ? newClient.tags.split(',').map(t => t.trim()) : [],
         });
-        setToast({ message: "Cliente atualizado", type: 'success' });
+        setToast({ message: `${vertical.clientNoun} atualizad${fem ? 'a' : 'o'}`, type: 'success' });
       } else {
         await addClient({
           name: newClient.name,
@@ -153,7 +162,7 @@ export default function Clients() {
           isVIP: false,
           isFavorite: false
         });
-        setToast({ message: "Cliente salvo com sucesso", type: 'success' });
+        setToast({ message: `${vertical.clientNoun} salv${fem ? 'a' : 'o'} com sucesso`, type: 'success' });
         triggerAutomation('welcome', newClient);
       }
       setIsAddModalOpen(false);
@@ -167,12 +176,12 @@ export default function Clients() {
       clients.forEach(async (c) => {
         if (!c.isVIP && (c.spent || 0) >= threshold) {
           await updateClient(c.id, { isVIP: true });
-          setToast({ message: `${c.name} agora é uma Cliente VIP! ✨`, type: 'success' });
+          setToast({ message: `${c.name} agora é ${artigoUm} ${vertical.clientNoun} VIP! ✨`, type: 'success' });
         }
       });
     } catch (error) {
       console.error(error);
-      setToast({ message: "Erro ao salvar cliente", type: 'error' });
+      setToast({ message: `Erro ao salvar ${cliente}`, type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -195,7 +204,7 @@ export default function Clients() {
       <div className="p-6 pb-2 shrink-0">
         <div className="flex items-center justify-between mb-2 mt-4">
           <Logo size="sm" />
-          <h1 className="text-[18px] font-bold tracking-tightest uppercase text-ios-text-secondary opacity-40">Clientes</h1>
+          <h1 className="text-[18px] font-bold tracking-tightest uppercase text-ios-text-secondary opacity-40">{vertical.clientNounPlural}</h1>
         </div>
 
         {/* Search Bar Immersive */}
@@ -203,7 +212,7 @@ export default function Clients() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-text-secondary opacity-40 z-10" size={16} />
           <Input 
             voice
-            placeholder="Buscar clientes..."
+            placeholder={`Buscar ${vertical.clientNounPlural.toLowerCase()}...`}
             className="pl-11 h-11 text-[13px]"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -214,7 +223,7 @@ export default function Clients() {
         <div className="flex items-center gap-2 mb-6 overflow-x-auto hide-scrollbar -mx-6 px-6 shrink-0">
           {[
             { id: 'all', label: 'Todos' },
-            { id: 'favorite', label: 'Favoritas', icon: Heart },
+            { id: 'favorite', label: fem ? 'Favoritas' : 'Favoritos', icon: Heart },
             { id: 'vip', label: 'VIPs', icon: StarIcon },
           ].map((f) => {
             const isActive = filterType === f.id;
@@ -295,7 +304,7 @@ export default function Clients() {
                       <StarIcon size={12} className="text-ios-gold fill-ios-gold shadow-[0_0_8px_rgba(230,192,139,0.5)]" />
                     </div>
                   ) : (
-                    <StatusBadge label="Cliente" variant="default" />
+                    <StatusBadge label={vertical.clientNoun} variant="default" />
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
@@ -319,14 +328,14 @@ export default function Clients() {
                     <Plus size={32} />
                   </div>
                   <div className="opacity-40">
-                    <p className="text-[14px] font-bold text-white mb-1">Nenhuma cliente ainda</p>
-                    <p className="text-[11px] text-white/50 leading-relaxed">Toque no <span className="text-ios-gold">+</span> para cadastrar<br />sua primeira cliente</p>
+                    <p className="text-[14px] font-bold text-white mb-1">{nenhum} {cliente} ainda</p>
+                    <p className="text-[11px] text-white/50 leading-relaxed">Toque no <span className="text-ios-gold">+</span> para cadastrar<br />seu{fem ? '' : ''} {primeiro} {cliente}</p>
                   </div>
                 </>
               ) : (
                 <>
                   <Search size={40} className="opacity-20" />
-                  <p className="text-[11px] font-bold uppercase tracking-widest opacity-20">Nenhuma cliente encontrada</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest opacity-20">{nenhum} {cliente} encontrad{fem ? 'a' : 'o'}</p>
                 </>
               )}
             </div>
@@ -347,7 +356,7 @@ export default function Clients() {
           <Modal 
             isOpen={!!selectedClient} 
             onClose={() => setSelectedClient(null)} 
-            title="Perfil da Cliente"
+            title={`Perfil ${fem ? 'da' : 'do'} ${vertical.clientNoun}`}
             footer={
               <div className="flex flex-col gap-3">
                 <div className="flex gap-4">
@@ -525,7 +534,7 @@ export default function Clients() {
               setIsAddModalOpen(false);
               setEditingClient(null);
             }} 
-            title={editingClient ? "Editar Cliente" : "Nova Cliente"}
+            title={editingClient ? `Editar ${vertical.clientNoun}` : `${fem ? 'Nova' : 'Novo'} ${vertical.clientNoun}`}
             footer={
               <div className="grid grid-cols-2 gap-3">
                 <Button variant="secondary" onClick={() => {

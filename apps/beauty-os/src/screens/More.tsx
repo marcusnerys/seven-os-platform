@@ -240,7 +240,7 @@ export default function More() {
     {
       title: 'Conta',
       items: [
-        { label: `Configurações do ${vertical.businessNoun}`, icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
+        { label: `Configurações ${vertical.businessArticle} ${vertical.businessNoun}`, icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
         { label: 'Refazer configuração inicial', icon: RefreshCw, color: 'text-ios-text-secondary', action: () => setHasOnboarded(false) },
         { label: 'Plano Premium', icon: CreditCard, color: 'text-ios-gold', badge: 'Ativo' },
       ]
@@ -335,7 +335,7 @@ export default function More() {
               Sair da conta
             </Button>
             <p className="text-center text-[10px] text-ios-text-secondary mt-6 font-medium tracking-widest uppercase opacity-40">
-              LESHANOT STUDIO v2.4.1
+              {settings.studioName || 'Leshanot OS'} · v2.4.1
             </p>
           </div>
         </div>
