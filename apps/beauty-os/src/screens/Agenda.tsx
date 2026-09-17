@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input, Textarea } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { Plus, ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon, User, MessageCircle, Trash2, X, CalendarPlus, Download } from 'lucide-react';
-import { cn, dataLocal } from '../lib/utils';
+import { cn, dataLocal, escapeICS } from '../lib/utils';
 import { useStore, Appointment } from '../lib/store';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
@@ -195,13 +195,13 @@ export default function Agenda() {
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//Leshanot Studio//Beauty OS//PT',
+      'PRODID:-//Leshanot OS//Agenda//PT',
       'BEGIN:VEVENT',
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`,
-      `SUMMARY:${appt.service} - ${clientName}`,
-      `DESCRIPTION:Serviço: ${appt.service}\\nCliente: ${clientName}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}${appt.notes ? '\\nObs: ' + appt.notes : ''}`,
-      'LOCATION:Leshanot Studio',
+      `SUMMARY:${escapeICS(appt.service)} - ${escapeICS(clientName)}`,
+      `DESCRIPTION:Serviço: ${escapeICS(appt.service)}\\nCliente: ${escapeICS(clientName)}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}${appt.notes ? '\\nObs: ' + escapeICS(appt.notes) : ''}`,
+      `LOCATION:${escapeICS(settings.studioName || '')}`,
       `STATUS:${appt.status === 'Cancelado' ? 'CANCELLED' : 'CONFIRMED'}`,
       'END:VEVENT',
       'END:VCALENDAR',

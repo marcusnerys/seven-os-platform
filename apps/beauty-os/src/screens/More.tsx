@@ -19,7 +19,7 @@ import {
   Users,
   CalendarDays
 } from 'lucide-react';
-import { cn, dataLocal } from '../lib/utils';
+import { cn, dataLocal, escapeICS } from '../lib/utils';
 import { applyTheme } from '../components/ThemeOnboarding';
 
 import { supabase } from '../lib/supabase';
@@ -146,8 +146,8 @@ export default function More() {
         'BEGIN:VEVENT',
         `DTSTART:${dtStart}`,
         `DTEND:${dtEnd}`,
-        `SUMMARY:${appt.service} - ${clientName}`,
-        `DESCRIPTION:Serviço: ${appt.service}\\nCliente: ${clientName}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}`,
+        `SUMMARY:${escapeICS(appt.service)} - ${escapeICS(clientName)}`,
+        `DESCRIPTION:${escapeICS(vertical.serviceNoun)}: ${escapeICS(appt.service)}\\n${escapeICS(vertical.clientNoun)}: ${escapeICS(clientName)}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}`,
         `STATUS:CONFIRMED`,
         `UID:${appt.id}@leshanotos`,
         'END:VEVENT',

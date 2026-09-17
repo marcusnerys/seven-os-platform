@@ -19,3 +19,20 @@ export function dataLocal(d: Date = new Date()): string {
   const dia = String(d.getDate()).padStart(2, '0');
   return `${ano}-${mes}-${dia}`;
 }
+
+/**
+ * Escapa um valor de texto para o formato iCalendar (RFC 5545).
+ *
+ * Barra invertida, ponto-e-vírgula e vírgula são separadores no formato, e
+ * quebra de linha precisa virar a sequência de dois caracteres barra-n. Sem
+ * isto, um cliente chamado "Silva, João" corrompe o arquivo e o aplicativo de
+ * calendário recusa o evento inteiro.
+ */
+export function escapeICS(valor: string): string {
+  return String(valor ?? '')
+    .split('\\').join('\\\\')
+    .split(';').join('\\;')
+    .split(',').join('\\,')
+    .split('\r\n').join('\\n')
+    .split('\n').join('\\n');
+}

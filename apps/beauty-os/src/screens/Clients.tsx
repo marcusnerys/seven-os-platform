@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { Search, Plus, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, escapeICS } from '../lib/utils';
 import { useStore, Client } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
@@ -57,18 +57,18 @@ export default function Clients() {
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//Leshanot Beauty OS//PT',
+      'PRODID:-//Leshanot OS//PT',
       'BEGIN:VEVENT',
       `UID:${uid}`,
       `DTSTAMP:${now}`,
       `DTSTART;VALUE=DATE:${dtstart}`,
       `RRULE:FREQ=YEARLY`,
-      `SUMMARY:🎂 Aniversário - ${client.name}`,
-      `DESCRIPTION:Cliente do Leshanot Studio\\nTelefone: ${client.phone}`,
+      `SUMMARY:🎂 Aniversário - ${escapeICS(client.name)}`,
+      `DESCRIPTION:${escapeICS(vertical.clientNoun)} de ${escapeICS(settings.studioName || '')}\\nTelefone: ${escapeICS(client.phone || '')}`,
       'BEGIN:VALARM',
       'TRIGGER:-PT0S',
       'ACTION:DISPLAY',
-      `DESCRIPTION:🎂 Hoje é aniversário de ${client.name}!`,
+      `DESCRIPTION:🎂 Hoje é aniversário de ${escapeICS(client.name)}!`,
       'END:VALARM',
       'END:VEVENT',
       'END:VCALENDAR',
@@ -97,7 +97,6 @@ export default function Clients() {
     setWhatsappPrompt({ phone: clientData.phone, message, title: template.title });
   };
 
-  // Get all unique tags from clients
   // Get all unique tags from clients
   const allTags = Array.from(new Set(clients.flatMap(c => c.tags || [])));
   const clientFallback = (name: string) => name.split(' ').map(n => n[0]).join('').substring(0, 2);

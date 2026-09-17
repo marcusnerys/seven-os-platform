@@ -36,7 +36,7 @@ export default function Automation() {
   // Campaign state
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [campaignSegment, setCampaignSegment] = useState<'all' | 'today' | 'tomorrow' | 'noshow'>('all');
-  const [campaignMessage, setCampaignMessage] = useState('Olá {{nome}}! 💛 Temos uma promoção especial para você na Leshanot Studio. Entre em contato para saber mais!');
+  const [campaignMessage, setCampaignMessage] = useState('Olá {{nome}}! 💛 Temos uma promoção especial para você na {{empresa}}. Entre em contato para saber mais!');
   const [campaignRecipients, setCampaignRecipients] = useState<Array<{ name: string; phone: string }>>([]);
   const [campaignStep, setCampaignStep] = useState<'compose' | 'recipients'>('compose');
 
