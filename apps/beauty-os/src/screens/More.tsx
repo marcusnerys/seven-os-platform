@@ -19,7 +19,7 @@ import {
   Users,
   CalendarDays
 } from 'lucide-react';
-import { cn, dataLocal } from '../lib/utils';
+import { cn, dataLocal, escapeICS } from '../lib/utils';
 import { applyTheme } from '../components/ThemeOnboarding';
 
 import { supabase } from '../lib/supabase';
@@ -146,8 +146,8 @@ export default function More() {
         'BEGIN:VEVENT',
         `DTSTART:${dtStart}`,
         `DTEND:${dtEnd}`,
-        `SUMMARY:${appt.service} - ${clientName}`,
-        `DESCRIPTION:Serviço: ${appt.service}\\nCliente: ${clientName}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}`,
+        `SUMMARY:${escapeICS(appt.service)} - ${escapeICS(clientName)}`,
+        `DESCRIPTION:${escapeICS(vertical.serviceNoun)}: ${escapeICS(appt.service)}\\n${escapeICS(vertical.clientNoun)}: ${escapeICS(clientName)}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}`,
         `STATUS:CONFIRMED`,
         `UID:${appt.id}@leshanotos`,
         'END:VEVENT',
@@ -240,7 +240,7 @@ export default function More() {
     {
       title: 'Conta',
       items: [
-        { label: `Configurações do ${vertical.businessNoun}`, icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
+        { label: `Configurações ${vertical.businessArticle} ${vertical.businessNoun}`, icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
         { label: 'Refazer configuração inicial', icon: RefreshCw, color: 'text-ios-text-secondary', action: () => setHasOnboarded(false) },
         { label: 'Plano Premium', icon: CreditCard, color: 'text-ios-gold', badge: 'Ativo' },
       ]
@@ -335,7 +335,7 @@ export default function More() {
               Sair da conta
             </Button>
             <p className="text-center text-[10px] text-ios-text-secondary mt-6 font-medium tracking-widest uppercase opacity-40">
-              LESHANOT STUDIO v2.4.1
+              {settings.studioName || 'Leshanot OS'} · v2.4.1
             </p>
           </div>
         </div>

@@ -17,12 +17,16 @@ export interface VerticalConfig {
   icon: string;
   /** Como o negócio se chama: "Estúdio", "Oficina"... */
   businessNoun: string;
+  /** Artigo que combina com businessNoun: "do Estúdio", "da Oficina". */
+  businessArticle: 'do' | 'da';
   /** Rótulo do campo de nome: "Nome do Estúdio" */
   businessNameLabel: string;
   /** Placeholder do campo de nome */
   businessNamePlaceholder: string;
   /** Singular de quem é atendido */
   clientNoun: string;
+  /** Gênero de clientNoun, para concordar artigos e adjetivos na interface. */
+  clientGender: 'f' | 'm';
   /** Plural de quem é atendido — usado na navegação */
   clientNounPlural: string;
   /** Singular do que é vendido/executado */
@@ -43,9 +47,11 @@ export const VERTICALS: Record<BusinessType, VerticalConfig> = {
     tagline: 'Salão, studio, barbearia, estética',
     icon: '💇',
     businessNoun: 'Estúdio',
+    businessArticle: 'do',
     businessNameLabel: 'Nome do Estúdio',
     businessNamePlaceholder: 'Meu Studio',
     clientNoun: 'Cliente',
+    clientGender: 'f',
     clientNounPlural: 'Clientes',
     serviceNoun: 'Serviço',
     serviceNounPlural: 'Serviços',
@@ -58,9 +64,11 @@ export const VERTICALS: Record<BusinessType, VerticalConfig> = {
     tagline: 'Auto center, funilaria, elétrica, borracharia',
     icon: '🔧',
     businessNoun: 'Oficina',
+    businessArticle: 'da',
     businessNameLabel: 'Nome da Oficina',
     businessNamePlaceholder: 'Minha Oficina',
     clientNoun: 'Cliente',
+    clientGender: 'm',
     clientNounPlural: 'Clientes',
     serviceNoun: 'Serviço',
     serviceNounPlural: 'Serviços',
@@ -73,9 +81,11 @@ export const VERTICALS: Record<BusinessType, VerticalConfig> = {
     tagline: 'Controle de gastos individual, sem clientes',
     icon: '💰',
     businessNoun: 'Perfil',
+    businessArticle: 'do',
     businessNameLabel: 'Seu nome',
     businessNamePlaceholder: 'Meu controle',
     clientNoun: 'Contato',
+    clientGender: 'm',
     clientNounPlural: 'Contatos',
     serviceNoun: 'Categoria',
     serviceNounPlural: 'Categorias',
@@ -88,9 +98,11 @@ export const VERTICALS: Record<BusinessType, VerticalConfig> = {
     tagline: 'Comércio, prestação de serviço, autônomo',
     icon: '🏪',
     businessNoun: 'Negócio',
+    businessArticle: 'do',
     businessNameLabel: 'Nome do Negócio',
     businessNamePlaceholder: 'Meu Negócio',
     clientNoun: 'Cliente',
+    clientGender: 'm',
     clientNounPlural: 'Clientes',
     serviceNoun: 'Serviço',
     serviceNounPlural: 'Serviços',

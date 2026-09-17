@@ -10,7 +10,12 @@ import { useStore } from '../lib/store';
 import { useWeather } from '../hooks/useWeather';
 
 export default function Dashboard() {
-  const { setActiveTab, setModalToOpen, updateUserAvatar, getRevenueData, getRevenueForecast, getSmartInsight, clients, appointments, transactions, user, notifications, markNotificationAsRead, automationTemplates, setShowDevTools } = useStore();
+  const { setActiveTab, setModalToOpen, updateUserAvatar, getRevenueData, getRevenueForecast, getSmartInsight, clients, appointments, transactions, user, notifications, markNotificationAsRead, automationTemplates, setShowDevTools, settings } = useStore();
+  const themeBg = useStore(state => state.themeBg);
+  // O tema claro é pintado por variável do Tailwind que não muda em runtime,
+  // então a cor do texto precisa ser calculada aqui. Sem isto, texto branco
+  // ficava sobre fundo quase branco (contraste 1.12, ilegível).
+  const corTitulo = themeBg === 'light' ? '#1C1C1E' : '#FFFFFF';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -116,7 +121,7 @@ export default function Dashboard() {
 
     const message = resolveMessage(template.message, {
       nome: client.name,
-      empresa: 'LESHANOT STUDIO'
+      empresa: settings.studioName || 'Meu Negócio'
     });
 
     openWhatsApp(client.phone, message);
@@ -137,7 +142,7 @@ export default function Dashboard() {
       servico: appt.service,
       data: 'amanhã',
       hora: appt.time,
-      empresa: 'LESHANOT STUDIO'
+      empresa: settings.studioName || 'Meu Negócio'
     });
 
     openWhatsApp(phone, message);
@@ -161,8 +166,8 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[11px] font-medium text-ios-text-secondary">Bem-vindo(a) de volta,</span>
-            <h2 className="text-[20px] font-bold tracking-tightest text-white">
-              {user?.user_metadata?.full_name || 'Studio'} ✨
+            <h2 className="text-[20px] font-bold tracking-tightest" style={{ color: corTitulo }}>
+              {settings.studioName || 'Meu Negócio'} ✨
             </h2>
           </div>
           <div className="flex items-center gap-3">
@@ -299,7 +304,7 @@ export default function Dashboard() {
                    </div>
                    <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-ios-gold uppercase tracking-wider">Aniversariante do dia</span>
-                      <span className="text-[15px] font-extrabold text-white">{birthdaysToday[0].name} 🎂</span>
+                      <span className="text-[15px] font-extrabold" style={{ color: corTitulo }}>{birthdaysToday[0].name} 🎂</span>
                    </div>
                 </div>
                 <Button 
@@ -333,7 +338,7 @@ export default function Dashboard() {
                    </div>
                    <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-ios-cyan uppercase tracking-wider">Lembretes de Amanhã</span>
-                      <span className="text-[15px] font-extrabold text-white">{tomorrowAppointments.length} agendamentos</span>
+                      <span className="text-[15px] font-extrabold" style={{ color: corTitulo }}>{tomorrowAppointments.length} agendamentos</span>
                    </div>
                 </div>
                 <Button 
@@ -449,7 +454,7 @@ export default function Dashboard() {
                   <span className="text-[10px] font-bold text-ios-gold uppercase tracking-wider">{n.title}</span>
                   {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-ios-gold" />}
                 </div>
-                <p className="text-[13px] text-white/90 leading-snug whitespace-pre-line">{n.message}</p>
+                <p className="text-[13px] leading-snug whitespace-pre-line" style={{ color: corTitulo, opacity: 0.9 }}>{n.message}</p>
                 <span className="text-[10px] text-ios-text-secondary mt-1">{new Date(n.createdAt).toLocaleDateString('pt-BR')} às {new Date(n.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
               </GlassCard>
             ))

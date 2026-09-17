@@ -272,7 +272,16 @@ export const useStore = create<AppStore>()(
         fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation);
         fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em');
 
-        supabase.from('beautyos_settings').select('*').eq('empresa_id', empresaId).maybeSingle().then(({ data }) => {
+        supabase.from('beautyos_settings').select('*').eq('empresa_id', empresaId).maybeSingle().then(({ data, error }) => {
+          // Sem olhar o `error`, qualquer falha de leitura (rede oscilando, token
+          // renovando) era lida como "não existe linha" e o negócio voltava a se
+          // chamar "Meu Negócio" no vertical genérico. Pior: se a pessoa
+          // mexesse em qualquer configuração nesse estado, o upsert gravava
+          // esse nome falso por cima do real. Na falha, mantém o que já está.
+          if (error) {
+            console.error('Falha ao ler as configurações:', error.message);
+            return;
+          }
           if (data) {
             set({ settings: { studioName: data.studio_name, location: data.location, currency: data.currency, businessType: (data.business_type ?? 'generic') as BusinessType } });
           } else {
@@ -291,6 +300,13 @@ export const useStore = create<AppStore>()(
             () => fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => set({ transactions: rows }), fromSnakeCaseTransaction, 'date'))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_notifications', filter: `empresa_id=eq.${empresaId}` },
             () => fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em'))
+          // Serviços e automações também precisam escutar: sem isto, cadastrar
+          // ou apagar um serviço mostrava o toast de sucesso mas a lista não
+          // mudava, e a pessoa repetia a operação achando que não tinha salvo.
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_services', filter: `empresa_id=eq.${empresaId}` },
+            () => fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => set({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service)))
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_automation_templates', filter: `empresa_id=eq.${empresaId}` },
+            () => fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation))
           .subscribe();
       };
 
@@ -304,8 +320,15 @@ export const useStore = create<AppStore>()(
         if (user) {
           startListeners(user.id);
         } else {
+          // Limpa TUDO do dono anterior. Antes sobravam serviços, notificações
+          // (com nome de cliente), templates e o nome do negócio na tela — e
+          // quem entrasse em seguida na mesma aba via os dados de quem saiu.
           stopListeners();
-          set({ clients: [], appointments: [], transactions: [] });
+          set({
+            clients: [], appointments: [], transactions: [],
+            services: [], notifications: [], automationTemplates: [], automationLogs: [],
+            settings: { studioName: 'Meu Negócio', location: 'São Paulo, BR', currency: 'BRL', businessType: 'generic' },
+          });
         }
       });
 
@@ -618,8 +641,11 @@ export const useStore = create<AppStore>()(
           if (!appointment || appointment.status === 'Concluído') return;
 
           try {
-            await updateAppointmentStatus(id, 'Concluído');
-
+            // A receita entra ANTES de marcar como concluído. Na ordem inversa,
+            // uma falha aqui deixava o atendimento "Concluído" sem o dinheiro
+            // lançado — e o botão de concluir some depois disso, então não havia
+            // como refazer. Falhando primeiro, o agendamento continua
+            // "Confirmado" e a pessoa pode tentar de novo.
             await addTransaction({
               amount: appointment.price,
               type: 'revenue',
@@ -627,6 +653,8 @@ export const useStore = create<AppStore>()(
               date: appointment.date,
               description: `Conclusão: ${appointment.service} - ${appointment.clientName || 'Cliente'}`,
             });
+
+            await updateAppointmentStatus(id, 'Concluído');
 
             if (appointment.clientId && appointment.clientId !== 'public-booking') {
               const client = get().clients.find(c => c.id === appointment.clientId);
@@ -650,7 +678,11 @@ export const useStore = create<AppStore>()(
 
             get().setToast({ message: "Atendimento concluído e registrado!", type: 'success' });
           } catch (error) {
+            // Relança: sem isto o erro morria aqui, o modal fechava e a pessoa
+            // acreditava que deu certo. Quem chama (Agenda.tsx) já tem catch
+            // que mostra "Erro ao concluir".
             console.error('Error completing appointment:', error instanceof Error ? error.message : 'unknown error');
+            throw error;
           }
         },
 

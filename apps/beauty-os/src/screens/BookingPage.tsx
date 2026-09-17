@@ -688,7 +688,7 @@ export default function BookingPage() {
       {/* Branding footer */}
       <div className="pb-28 text-center">
         <p className="text-[10px] uppercase tracking-[3px] font-bold" style={{ color: `${colors.textSecondary}50` }}>
-          Leshanot Studio
+          {studio.studioName}
         </p>
       </div>
 

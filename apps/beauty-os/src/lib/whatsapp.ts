@@ -21,7 +21,7 @@ export function resolveMessage(
   message = message.replace(/\{\{servico\}\}/g, data.servico || '');
   message = message.replace(/\{\{data\}\}/g, data.data || '');
   message = message.replace(/\{\{hora\}\}/g, data.hora || '');
-  message = message.replace(/\{\{empresa\}\}/g, data.empresa || 'LESHANOT STUDIO');
+  message = message.replace(/\{\{empresa\}\}/g, data.empresa || 'Meu Negócio');
   message = message.replace(/\{\{saudacao\}\}/g, finalSaudacao);
   return message;
 }

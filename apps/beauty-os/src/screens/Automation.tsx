@@ -22,6 +22,7 @@ import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
 export default function Automation() {
   const setActiveTab = useStore(state => state.setActiveTab);
+  const settings = useStore(state => state.settings);
   const templates = useStore(state => state.automationTemplates);
   const updateTemplate = useStore(state => state.updateAutomationTemplate);
   const clients = useStore(state => state.clients);
@@ -35,7 +36,7 @@ export default function Automation() {
   // Campaign state
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [campaignSegment, setCampaignSegment] = useState<'all' | 'today' | 'tomorrow' | 'noshow'>('all');
-  const [campaignMessage, setCampaignMessage] = useState('Olá {{nome}}! 💛 Temos uma promoção especial para você na Leshanot Studio. Entre em contato para saber mais!');
+  const [campaignMessage, setCampaignMessage] = useState('Olá {{nome}}! 💛 Temos uma promoção especial para você na {{empresa}}. Entre em contato para saber mais!');
   const [campaignRecipients, setCampaignRecipients] = useState<Array<{ name: string; phone: string }>>([]);
   const [campaignStep, setCampaignStep] = useState<'compose' | 'recipients'>('compose');
 
@@ -113,7 +114,7 @@ export default function Automation() {
       servico: 'Design de Sobrancelhas',
       data: '15/05/2026',
       hora: '14:00',
-      empresa: 'LESHANOT STUDIO'
+      empresa: settings.studioName || 'Meu Negócio'
     });
     setPreviewContent(resolved);
     setIsPreviewOpen(true);
