@@ -15,7 +15,16 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const vertical = getVertical(settings.businessType);
   const tabs = [
     { id: 'dashboard', label: 'Início', icon: Home },
-    ...(vertical.hasScheduling ? [{ id: 'agenda', label: 'Agenda', icon: Calendar }] : []),
+    ...(vertical.hasScheduling
+      ? [
+          { id: 'agenda', label: 'Agenda', icon: Calendar },
+          // A tela de clientes existia mas não tinha aba: só dava para chegar
+          // nela pelo card do Dashboard, e de qualquer outra aba não havia
+          // caminho de volta. Numa vertical sem agendamento (finanças
+          // pessoais) ela continua escondida, porque lá não há clientes.
+          { id: 'clients', label: vertical.clientNounPlural, icon: Users },
+        ]
+      : []),
     { id: 'voice', label: 'Voz', icon: Mic, isAction: true },
     { id: 'financial', label: 'Financeiro', icon: CircleDollarSign },
     { id: 'more', label: 'Mais', icon: Menu },

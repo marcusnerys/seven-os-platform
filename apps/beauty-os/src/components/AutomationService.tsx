@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 export function AutomationService() {
   const { clients, automationTemplates, automationLogs, addAutomationLog, user } = useStore();
+  const settings = useStore(state => state.settings);
   const [pendingBirthdays, setPendingBirthdays] = useState<any[]>([]);
   const [showPrompt, setShowPrompt] = useState(false);
 
@@ -59,7 +60,7 @@ export function AutomationService() {
     pendingBirthdays.slice(0, 1).forEach((client) => {
       const message = resolveMessage(template.message, {
         nome: client.name,
-        empresa: 'LESHANOT STUDIO'
+        empresa: settings.studioName || 'Meu Negócio'
       });
       openWhatsApp(client.phone, message);
     });

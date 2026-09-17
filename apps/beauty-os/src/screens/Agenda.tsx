@@ -10,6 +10,7 @@ import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 export default function Agenda() {
   const { appointments, clients, addAppointment, updateAppointment, updateAppointmentStatus, completeAppointment, isSlotAvailable, deleteAppointment, addTransaction, modalToOpen, modalData, setToast, setModalToOpen, automationTemplates } = useStore();
   const themeBg = useStore(state => state.themeBg);
+  const settings = useStore(state => state.settings);
   const isLight = themeBg === 'light';
   const textPrimary = isLight ? '#1C1C1E' : '#F5F5F7';
   const textSecondary = isLight ? '#6B6B70' : '#8E8E93';
@@ -56,11 +57,11 @@ export default function Agenda() {
     const formattedDate = `${day}/${month}/${year}`;
 
     const message = resolveMessage(template.message, {
-      nome: client?.name || appt.clientName,
+      nome: client?.name || appt.clientName || 'Cliente',
       servico: appt.service,
       data: formattedDate,
       hora: appt.time,
-      empresa: 'LESHANOT STUDIO'
+      empresa: settings.studioName || 'Meu Negócio'
     });
 
     setWhatsappPrompt({ phone, message, title: template.title });
@@ -394,7 +395,7 @@ export default function Agenda() {
                       const client = clients.find(c => c.id === upcoming.clientId);
                       const phone = client?.phone || upcoming.clientPhone;
                       if (phone) {
-                        openWhatsApp(phone, `Olá ${upcoming.clientName}! Confirmando seu horário: ${upcoming.service} às ${upcoming.time}.`);
+                        openWhatsApp(phone, `Olá ${getClientName(upcoming)}! Confirmando seu horário: ${upcoming.service} às ${upcoming.time}.`);
                       } else {
                         setToast({ message: 'Cliente sem telefone cadastrado', type: 'error' });
                       }
@@ -411,7 +412,7 @@ export default function Agenda() {
                   color: 'bg-red-500/90',
                   action: () => {
                     if (displayAppointments.length === 1) {
-                      if (confirm(`Apagar agendamento de ${displayAppointments[0].clientName}?`)) {
+                      if (confirm(`Apagar agendamento de ${getClientName(displayAppointments[0])}?`)) {
                         deleteAppointment(displayAppointments[0].id);
                         setToast({ message: 'Agendamento apagado', type: 'success' });
                       }

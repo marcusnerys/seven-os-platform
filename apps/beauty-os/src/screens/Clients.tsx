@@ -9,6 +9,7 @@ import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
 export default function Clients() {
   const { clients, toggleFavorite, addClient, updateClient, deleteClient, modalToOpen, modalData, setModalToOpen, automationTemplates } = useStore();
+  const settings = useStore(state => state.settings);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'favorite' | 'vip'>('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -81,7 +82,7 @@ export default function Clients() {
 
     const message = resolveMessage(template.message, {
       nome: clientData.name,
-      empresa: 'LESHANOT STUDIO'
+      empresa: settings.studioName || 'Meu Negócio'
     });
 
     setWhatsappPrompt({ phone: clientData.phone, message, title: template.title });
