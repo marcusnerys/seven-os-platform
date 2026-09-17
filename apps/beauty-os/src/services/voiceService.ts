@@ -1,6 +1,23 @@
 import { useStore } from '../lib/store';
 import { dataLocal } from '../lib/utils';
 
+/**
+ * fetch com prazo. Sem isto, um servidor que trava deixa o `await` pendurado
+ * para sempre: o catch nunca dispara, a resposta alternativa nunca aparece, e
+ * o assistente fica girando na tela do usuário sem nunca desistir.
+ */
+const TEMPO_LIMITE_MS = 15_000;
+
+async function fetchComPrazo(url: string, init: RequestInit): Promise<Response> {
+  const controle = new AbortController();
+  const prazo = setTimeout(() => controle.abort(), TEMPO_LIMITE_MS);
+  try {
+    return await fetch(url, { ...init, signal: controle.signal });
+  } finally {
+    clearTimeout(prazo);
+  }
+}
+
 export interface VoiceCommandResult {
   action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip' | 'create_service' | 'get_daily_summary' | 'show_financial_summary' | 'list_inactive_clients' | 'unknown';
   data?: any;
@@ -32,7 +49,7 @@ export function useVoiceAssistant() {
       .reduce((sum, t) => sum + t.amount, 0);
 
     try {
-      const response = await fetch('/api/voice/parse', {
+      const response = await fetchComPrazo('/api/voice/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,7 +85,7 @@ export function useVoiceAssistant() {
         today: dataLocal(),
       };
 
-      const response = await fetch("/api/voice/parse", {
+      const response = await fetchComPrazo("/api/voice/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, context }),
