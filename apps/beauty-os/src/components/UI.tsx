@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useStore } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Mic, MicOff } from 'lucide-react';
@@ -168,6 +169,9 @@ export function PWAInstallPrompt() {
 }
 
 export function Modal({ isOpen, onClose, title, children, footer }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, footer?: React.ReactNode }) {
+  // O hook precisa vir antes do early return, senão a ordem dos hooks muda
+  // entre renders e o React quebra.
+  const nomeDoNegocio = useStore(state => state.settings.studioName);
   if (!isOpen) return null;
 
   return (
@@ -188,7 +192,7 @@ export function Modal({ isOpen, onClose, title, children, footer }: { isOpen: bo
       >
         <div className="p-6 pb-4 flex items-center justify-between border-b border-white/5 bg-ios-surface/80 backdrop-blur-md z-10 shrink-0">
           <div className="flex flex-col gap-0.5">
-            <p className="text-[10px] font-bold text-ios-gold uppercase tracking-[1.5px] opacity-70">Leshanot Studio</p>
+            <p className="text-[10px] font-bold text-ios-gold uppercase tracking-[1.5px] opacity-70">{nomeDoNegocio || 'Leshanot OS'}</p>
             <h2 className="text-[22px] font-bold tracking-tightest text-white leading-tight">{title}</h2>
           </div>
           <button onClick={onClose} className="bg-white/5 p-3 rounded-full text-ios-text-secondary active:opacity-50 transition-opacity">
