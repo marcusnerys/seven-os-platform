@@ -28,8 +28,11 @@ export function resolveMessage(
 
 export function openWhatsApp(phone: string, message: string) {
   const cleanPhone = phone.replace(/\D/g, '');
-  // Assuming Brazil +55 if not provided, but usually better to have country code
-  const finalPhone = cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
+  // Número brasileiro sem código do país tem 10 dígitos (fixo e celular antigo)
+  // ou 11 (celular com o 9). Antes só o de 11 recebia o 55, então um número de
+  // 10 dígitos gerava um link do WhatsApp inválido.
+  const semCodigoDoPais = cleanPhone.length === 10 || cleanPhone.length === 11;
+  const finalPhone = semCodigoDoPais ? `55${cleanPhone}` : cleanPhone;
   const url = `https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`;
   window.open(url, '_blank');
 }

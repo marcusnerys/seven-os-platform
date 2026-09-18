@@ -328,6 +328,11 @@ export const useStore = create<AppStore>()(
             clients: [], appointments: [], transactions: [],
             services: [], notifications: [], automationTemplates: [], automationLogs: [],
             settings: { studioName: 'Meu Negócio', location: 'São Paulo, BR', currency: 'BRL', businessType: 'generic' },
+            // hasOnboarded fica no localStorage do aparelho, não da conta. Sem
+            // zerar aqui, a segunda pessoa a entrar no mesmo navegador pula o
+            // questionário e fica no vertical genérico sem nunca escolher.
+            hasOnboarded: false,
+            hasChosenTheme: false,
           });
         }
       });
