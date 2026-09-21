@@ -219,6 +219,12 @@ export function Modal({ isOpen, onClose, title, children, footer }: { isOpen: bo
 export function VoiceButton({ onResult, onInterim, className }: { onResult: (text: string) => void, onInterim?: (text: string) => void, className?: string }) {
   const [isListening, setIsListening] = React.useState(false);
   const recognitionRef = React.useRef<any>(null);
+  // O texto parcial precisa sobreviver até o fim do reconhecimento. Se a fala
+  // termina sem um resultado "final" — silêncio, toque para parar, oscilação —
+  // é ele que vira o valor. Sem isso o campo mostrava o texto e o estado ficava
+  // vazio, travando o botão de salvar sem explicação.
+  const ultimoInterim = React.useRef('');
+  const houveFinal = React.useRef(false);
 
   const toggleListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -241,10 +247,6 @@ export function VoiceButton({ onResult, onInterim, className }: { onResult: (tex
     recognition.interimResults = true;
     recognitionRef.current = recognition;
 
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
-
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
       let finalTranscript = '';
@@ -258,10 +260,13 @@ export function VoiceButton({ onResult, onInterim, className }: { onResult: (tex
       }
 
       if (finalTranscript && onResult) {
+        houveFinal.current = true;
+        ultimoInterim.current = '';
         onResult(finalTranscript);
       }
-      if (interimTranscript && onInterim) {
-        onInterim(interimTranscript);
+      if (interimTranscript) {
+        ultimoInterim.current = interimTranscript;
+        if (onInterim) onInterim(interimTranscript);
       }
     };
 
@@ -275,6 +280,20 @@ export function VoiceButton({ onResult, onInterim, className }: { onResult: (tex
 
     recognition.onend = () => {
       setIsListening(false);
+      // Terminou sem resultado final, mas havia texto na tela: comita o que a
+      // pessoa viu. Assim o que está escrito no campo é sempre o que está no
+      // estado, e o botão de salvar reflete a realidade.
+      if (!houveFinal.current && ultimoInterim.current && onResult) {
+        onResult(ultimoInterim.current);
+      }
+      ultimoInterim.current = '';
+      houveFinal.current = false;
+    };
+
+    recognition.onstart = () => {
+      ultimoInterim.current = '';
+      houveFinal.current = false;
+      setIsListening(true);
     };
 
     recognition.start();
@@ -341,7 +360,12 @@ export function Input({
           className
         )}
         value={interim ? (value ? value + ' ' + interim : interim) : value}
-        onChange={onChange}
+        onChange={(e) => {
+          // Digitar descarta qualquer texto parcial pendente, senão o campo
+          // mostraria o que foi digitado colado no que foi falado.
+          if (interim) setInterim('');
+          if (onChange) onChange(e);
+        }}
         {...props}
       />
       {voice && (
@@ -393,7 +417,10 @@ export function Textarea({
           className
         )}
         value={interim ? (value ? value + ' ' + interim : interim) : value}
-        onChange={onChange}
+        onChange={(e) => {
+          if (interim) setInterim('');
+          if (onChange) onChange(e);
+        }}
         {...props}
       />
       {voice && (
