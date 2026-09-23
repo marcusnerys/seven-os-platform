@@ -18,6 +18,22 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/**
+ * Tipos que o Gemini lê direto. O PDF estava de fora: o código só deixava
+ * passar mime que começasse com "image", então um extrato em PDF — que a
+ * tela oferece no seletor de arquivos — seguia com os bytes do PDF
+ * rotulados como image/jpeg. O Gemini recebia um JPEG corrompido e a
+ * importação falhava sempre, para todo mundo, desde o início.
+ */
+const TIPOS_ACEITOS = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -40,7 +56,14 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'fileBase64 e mimeType são obrigatórios' }, 400);
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // Data de hoje em São Paulo, não em UTC. A função roda num servidor em
+    // UTC, então toISOString() devolvia o dia seguinte a partir das 21h no
+    // Brasil — e é justo à noite que se fotografa a anotação do dia. Toda
+    // transação sem data na imagem entrava com a data errada.
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
     const prompt = `Você é um assistente financeiro especializado em extratos bancários e anotações de gastos.
 Analise esta imagem e extraia TODAS as transações financeiras visíveis.
 
@@ -55,33 +78,44 @@ Regras:
 - Categorize de forma inteligente (Aluguel, Produtos, Serviço, Alimentação, Transporte, etc)
 - Retorne JSON puro sem nenhum texto antes ou depois`;
 
-    // Chaves AQ. são tokens OAuth e vão no header Authorization;
-    // chaves AIza são API keys e vão na query string.
-    const isOAuthToken = GEMINI_API_KEY.startsWith('AQ.');
-    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-    const url = isOAuthToken ? endpoint : `${endpoint}?key=${GEMINI_API_KEY}`;
+    // Apelido em vez de versão fixa: o código apontava para gemini-2.0-flash,
+    // aposentado pelo Google, e toda chamada voltava 404. O apelido acompanha
+    // a versão corrente e sobrevive à próxima aposentadoria.
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
+
+    // Toda chave do AI Studio vai na query string, inclusive as de prefixo
+    // AQ., que o AI Studio passou a emitir. O código presumia que AQ. era
+    // token OAuth e mandava no header Authorization: o Gemini respondia
+    // "Expected OAuth 2 access token" em toda chamada. Verificado contra a
+    // API com a chave do projeto: 401 como Bearer, 200 como ?key=.
+    const url = `${endpoint}?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (isOAuthToken) headers['Authorization'] = `Bearer ${GEMINI_API_KEY}`;
 
-    const geminiRes = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            {
-              inline_data: {
-                mime_type: mimeType.startsWith('image') ? mimeType : 'image/jpeg',
-                data: fileBase64,
-              },
+    const corpo = JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          {
+            inline_data: {
+              mime_type: TIPOS_ACEITOS.includes(mimeType) ? mimeType : 'image/jpeg',
+              data: fileBase64,
             },
-          ],
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
-      }),
+          },
+        ],
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
     });
+
+    // Uma repetição em fila cheia (429) ou indisponibilidade momentânea
+    // (503). O app trata qualquer falha daqui caindo para o OCR local, que
+    // recusa PDF — então um 503 de alguns segundos virava "tire uma foto do
+    // extrato" para quem mandou um PDF perfeitamente legível.
+    let geminiRes = await fetch(url, { method: 'POST', headers, body: corpo });
+    if (geminiRes.status === 429 || geminiRes.status === 503) {
+      await new Promise(r => setTimeout(r, 1500));
+      geminiRes = await fetch(url, { method: 'POST', headers, body: corpo });
+    }
 
     const geminiData = await geminiRes.json();
 
