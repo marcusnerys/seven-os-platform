@@ -36,3 +36,58 @@ export function escapeICS(valor: string): string {
     .split('\r\n').join('\\n')
     .split('\n').join('\\n');
 }
+
+export interface Ocupado {
+  time: string;
+  duration: number;
+}
+
+/** Minutos desde a meia-noite. "14:30" vira 870. */
+export function emMinutos(hhmm: string): number {
+  return Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+}
+
+/**
+ * Se um horário pode ser escolhido na página pública de agendamento.
+ *
+ * Espelha as recusas da RPC de reserva (migration 0010): sobreposição com
+ * atendimento já marcado e horário que já passou no próprio dia. Enquanto a
+ * tela discordava do servidor, o visitante escolhia o horário, preenchia nome
+ * e telefone e só no envio era recusado.
+ */
+export function horarioIndisponivel(
+  slot: string,
+  duracao: number,
+  ocupados: Ocupado[],
+  ehHoje: boolean,
+  agoraMin: number
+): boolean {
+  const inicio = emMinutos(slot);
+  const fim = inicio + duracao;
+
+  if (ehHoje && inicio <= agoraMin) return true;
+
+  return ocupados.some(o => {
+    const oInicio = emMinutos(o.time);
+    return inicio < oInicio + o.duration && fim > oInicio;
+  });
+}
+
+/**
+ * Data e hora em São Paulo, que é o fuso usado pela RPC de reserva.
+ * O visitante pode estar em outro fuso — ou com o relógio errado — e nesse
+ * caso a tela e o servidor discordariam sobre o que já passou.
+ */
+export function agoraEmSaoPaulo(): { dia: string; minutos: number } {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+
+  const get = (t: string) => partes.find(p => p.type === t)?.value ?? '00';
+  return {
+    dia: `${get('year')}-${get('month')}-${get('day')}`,
+    minutos: Number(get('hour')) * 60 + Number(get('minute')),
+  };
+}

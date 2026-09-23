@@ -18,7 +18,7 @@ export default function Financial() {
   const [isParsingStatement, setIsParsingStatement] = useState(false);
   const [parseMode, setParseMode] = useState<'ai' | 'ocr'>('ai');
   const [ocrProgress, setOcrProgress] = useState(0);
-  const [parsedTxs, setParsedTxs] = useState<Array<{ date: string; description: string; amount: number; type: 'revenue' | 'expense'; category: string; selected: boolean }>>([]);
+  const [parsedTxs, setParsedTxs] = useState<Array<{ date: string; description: string; amount: number; type: 'revenue' | 'expense'; category: string; selected: boolean; jaLancada: boolean }>>([]);
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const settings = useStore(state => state.settings);
@@ -106,7 +106,30 @@ export default function Financial() {
         return;
       }
 
-      setParsedTxs(txs.map(t => ({ ...t, selected: true })));
+      // Fotografar o mesmo extrato duas vezes é o erro mais fácil de cometer,
+      // e nada no caminho impedia: o lançamento entrava de novo e o mês
+      // fechava com o dobro. Mesma data, mesmo valor e mesma descrição já
+      // no Financeiro chega marcado como repetido e desmarcado.
+      const jaExiste = new Set(
+        transactions.map(t => `${t.date}|${t.amount.toFixed(2)}|${t.description.trim().toLowerCase()}`)
+      );
+
+      const marcadas = txs.map(t => {
+        const jaLancada = jaExiste.has(`${t.date}|${t.amount.toFixed(2)}|${t.description.trim().toLowerCase()}`);
+        return { ...t, jaLancada, selected: !jaLancada };
+      });
+
+      const repetidas = marcadas.filter(t => t.jaLancada).length;
+      if (repetidas) {
+        setToast({
+          message: repetidas === 1
+            ? '1 lançamento já estava no Financeiro e veio desmarcado.'
+            : `${repetidas} lançamentos já estavam no Financeiro e vieram desmarcados.`,
+          type: 'success',
+        });
+      }
+
+      setParsedTxs(marcadas);
       setShowImportPreview(true);
     } catch (err) {
       setToast({ message: String((err as Error).message || err), type: 'error' });
@@ -120,18 +143,38 @@ export default function Financial() {
     const toImport = parsedTxs.filter(t => t.selected);
     if (!toImport.length) return;
     setIsImporting(true);
-    try {
-      for (const tx of toImport) {
+
+    // Falhar no meio do laço deixava os anteriores gravados e dizia só "Erro
+    // ao importar". Quem tentasse de novo duplicava o que já tinha entrado.
+    // Agora cada lançamento é contado e os que falharam continuam na lista.
+    const falharam: typeof toImport = [];
+    let gravadas = 0;
+
+    for (const tx of toImport) {
+      try {
         await addTransaction({ amount: tx.amount, type: tx.type, category: tx.category, date: tx.date, description: tx.description });
+        gravadas++;
+      } catch {
+        falharam.push(tx);
       }
-      setToast({ message: `${toImport.length} transaç${toImport.length > 1 ? 'ões importadas' : 'ão importada'} com sucesso!`, type: 'success' });
+    }
+
+    setIsImporting(false);
+
+    if (!falharam.length) {
+      setToast({ message: `${gravadas} transaç${gravadas > 1 ? 'ões importadas' : 'ão importada'} com sucesso!`, type: 'success' });
       setShowImportPreview(false);
       setParsedTxs([]);
-    } catch {
-      setToast({ message: 'Erro ao importar transações', type: 'error' });
-    } finally {
-      setIsImporting(false);
+      return;
     }
+
+    setParsedTxs(falharam.map(t => ({ ...t, selected: true })));
+    setToast({
+      message: gravadas
+        ? `${gravadas} importada${gravadas > 1 ? 's' : ''}, ${falharam.length} falhou. As que faltam seguem na lista.`
+        : 'Nenhuma transação foi importada. Verifique a conexão e tente de novo.',
+      type: 'error',
+    });
   };
 
   const handleAddTransaction = async () => {
@@ -514,7 +557,10 @@ export default function Financial() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold text-white truncate">{tx.description}</p>
-                    <p className="text-[10px] text-white/30 mt-0.5">{tx.category} · {tx.date}</p>
+                    <p className="text-[10px] text-white/30 mt-0.5">
+                      {tx.category} · {tx.date}
+                      {tx.jaLancada && <span className="text-amber-400/90"> · já lançada</span>}
+                    </p>
                   </div>
                   <span className={cn("text-[14px] font-bold shrink-0", tx.type === 'revenue' ? "text-emerald-400" : "text-red-400")}>
                     {tx.type === 'revenue' ? '+' : '-'}R$ {tx.amount.toFixed(2)}

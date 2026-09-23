@@ -11,20 +11,12 @@ import {
   MessageSquare,
   MessageCircle,
   Search,
-  Scissors,
-  Eye,
-  Wind,
-  Sun,
   Sparkles,
-  Heart,
-  Palette,
-  Zap,
-  Star,
   MapPin,
   ShieldCheck,
 } from 'lucide-react';
 import { Button, Toast } from '../components/UI';
-import { cn, dataLocal } from '../lib/utils';
+import { cn, dataLocal, horarioIndisponivel, agoraEmSaoPaulo } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────
@@ -36,24 +28,6 @@ interface StudioInfo {
   themeBg: 'dark' | 'light';
 }
 
-// ─── Constants ───────────────────────────────────────────
-const CATEGORIES = [
-  { id: 'all', name: 'Todos', icon: Sparkles },
-  { id: 'unhas', name: 'Unhas', icon: Scissors },
-  { id: 'cilios', name: 'Cílios', icon: Eye },
-  { id: 'cabelo', name: 'Cabelo', icon: Wind },
-  { id: 'depilacao', name: 'Depilação', icon: Zap },
-  { id: 'sobrancelha', name: 'Sobrancelha', icon: Palette },
-  { id: 'bronzeamento', name: 'Bronzeamento', icon: Sun },
-  { id: 'estetica', name: 'Estética', icon: Heart },
-  { id: 'maquiagem', name: 'Maquiagem', icon: Star },
-];
-
-
-/** Minutos desde a meia-noite. "14:30" vira 870. */
-function emMinutos(hhmm: string): number {
-  return Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
-}
 
 const TIME_SLOTS = ['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00','18:00'];
 
@@ -112,7 +86,6 @@ export default function BookingPage() {
   const [services, setServices] = useState<any[] | null>(null);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [clientInfo, setClientInfo] = useState({ name: '', phone: '', notes: '' });
@@ -126,6 +99,10 @@ export default function BookingPage() {
 
   const colors = makeColors(studio.themeAccent, studio.themeBg);
   const availableDays = getNextDays(14);
+
+  const agora = agoraEmSaoPaulo();
+  const ehHoje = selectedDate !== null && dataLocal(selectedDate) === agora.dia;
+  const agoraEmMinutos = agora.minutos;
 
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -150,7 +127,7 @@ export default function BookingPage() {
         setToast({ message: 'Não foi possível carregar os serviços. Recarregue a página.', type: 'error' });
         return;
       }
-      setServices((data ?? []).map((r: any) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration, category: r.category || 'unhas' })));
+      setServices((data ?? []).map((r: any) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration, })));
     });
   }, [userId]);
 
@@ -172,9 +149,8 @@ export default function BookingPage() {
 
   const filteredServices = useMemo(() => (services ?? []).filter(s => {
     const matchSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchCat = activeCategory === 'all' || s.category === activeCategory;
-    return matchSearch && matchCat;
-  }), [services, searchQuery, activeCategory]);
+    return matchSearch;
+  }), [services, searchQuery]);
 
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhone(e.target.value);
@@ -398,26 +374,12 @@ export default function BookingPage() {
                 />
               </div>
 
-              {/* Categories */}
-              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar -mx-5 px-5">
-                {CATEGORIES.map(cat => {
-                  const Icon = cat.icon;
-                  const isActive = activeCategory === cat.id;
-                  return (
-                    <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-full whitespace-nowrap text-[13px] font-bold border transition-all active:scale-95 shrink-0"
-                      style={{
-                        background: isActive ? colors.accent : colors.surface,
-                        borderColor: isActive ? colors.accent : colors.border,
-                        color: isActive ? colors.accentText : colors.textSecondary,
-                      }}
-                    >
-                      <Icon size={14} />
-                      {cat.name}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* A barra de categorias saiu daqui. beautyos_services não tem
+                  coluna category, então todo serviço caía no rótulo padrão
+                  "unhas" e escolher qualquer outra aba devolvia lista vazia
+                  para todo mundo. Fora que a lista era de salão: uma oficina
+                  publicava a própria página oferecendo Cílios e Depilação.
+                  A busca por nome já cobre catálogos desse tamanho. */}
 
               {/* Service list */}
               {services === null && (
@@ -448,8 +410,7 @@ export default function BookingPage() {
 
               <div className="flex flex-col gap-3">
                 {filteredServices.map(service => {
-                  const catInfo = CATEGORIES.find(c => c.id === service.category);
-                  const Icon = catInfo?.icon || Sparkles;
+                  const Icon = Sparkles;
                   return (
                     <motion.button
                       key={service.id}
@@ -558,12 +519,13 @@ export default function BookingPage() {
                   // pessoa escolhia 09:00, preenchia tudo e só no envio ouvia
                   // que o horário estava tomado — voltando para uma tela que
                   // continuava mostrando 09:00 livre.
-                  const inicio = emMinutos(slot);
-                  const fim = inicio + (selectedService?.duration ?? 60);
-                  const occupied = occupiedSlots.some(o => {
-                    const oInicio = emMinutos(o.time);
-                    return inicio < oInicio + o.duration && fim > oInicio;
-                  });
+                  const occupied = horarioIndisponivel(
+                    slot,
+                    selectedService?.duration ?? 60,
+                    occupiedSlots,
+                    ehHoje,
+                    agoraEmMinutos
+                  );
                   const selected = selectedTime === slot;
                   return (
                     <button

@@ -15,7 +15,6 @@ export default function Clients() {
   // O app falava sempre no feminino ("Nenhuma cliente", "Favoritas"), o que
   // soa como salão numa oficina. A vertical diz o gênero de quem é atendido.
   const fem = vertical.clientGender === 'f';
-  const artigoUm = fem ? 'uma' : 'um';
   const nenhum = fem ? 'Nenhuma' : 'Nenhum';
   const primeiro = fem ? 'primeira' : 'primeiro';
   const cliente = vertical.clientNoun.toLowerCase();
@@ -168,16 +167,13 @@ export default function Clients() {
       setEditingClient(null);
       setNewClient({ name: '', phone: '', email: '', tags: '', birthDate: '' });
 
-      // VIP Promotion Logic (Check if newly added/updated client qualifies)
-      // Note: For a new client spent is 0, so only updates for existing clients would really trigger this.
-      // Or we can check all clients periodically, but doing it here is efficient for the current user.
-      const threshold = 500;
-      clients.forEach(async (c) => {
-        if (!c.isVIP && (c.spent || 0) >= threshold) {
-          await updateClient(c.id, { isVIP: true });
-          setToast({ message: `${c.name} agora é ${artigoUm} ${vertical.clientNoun} VIP! ✨`, type: 'success' });
-        }
-      });
+      // A promoção a VIP saiu daqui. Salvar um cliente varria a base inteira
+      // com forEach(async) sem await: a falha virava rejeição não tratada, o
+      // catch abaixo nunca via, e cada promovido disparava um toast por cima
+      // do anterior — cinco promoções, um nome na tela. Pior, o gatilho era o
+      // evento errado: quem gasta passa do limite ao concluir atendimento,
+      // não ao alguém editar um cadastro qualquer. Agora é decidido em
+      // completeAppointment, onde visitas e gasto de fato mudam.
     } catch (error) {
       console.error(error);
       setToast({ message: `Erro ao salvar ${cliente}`, type: 'error' });
