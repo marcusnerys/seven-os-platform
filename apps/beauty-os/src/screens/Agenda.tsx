@@ -410,11 +410,18 @@ export default function Agenda() {
                   label: 'Apagar',
                   icon: Trash2,
                   color: 'bg-red-500/90',
-                  action: () => {
+                  action: async () => {
                     if (displayAppointments.length === 1) {
                       if (confirm(`Apagar agendamento de ${getClientName(displayAppointments[0])}?`)) {
-                        deleteAppointment(displayAppointments[0].id);
-                        setToast({ message: 'Agendamento apagado', type: 'success' });
+                        // Sem await, a falha virava rejeição não tratada e o
+                        // aviso de sucesso aparecia mesmo com o agendamento
+                        // ainda na agenda.
+                        try {
+                          await deleteAppointment(displayAppointments[0].id);
+                          setToast({ message: 'Agendamento apagado', type: 'success' });
+                        } catch {
+                          setToast({ message: 'Erro ao apagar agendamento', type: 'error' });
+                        }
                       }
                     } else {
                       setToast({ message: 'Toque no agendamento e selecione Cancelar para apagar', type: 'success' });

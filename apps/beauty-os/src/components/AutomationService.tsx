@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
+import { getVertical } from '../lib/vertical';
 import { dataLocal } from '../lib/utils';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 import { Modal, Button } from './UI';
@@ -9,6 +10,7 @@ import { AnimatePresence, motion } from 'motion/react';
 export function AutomationService() {
   const { clients, automationTemplates, automationLogs, addAutomationLog, user } = useStore();
   const settings = useStore(state => state.settings);
+  const vertical = getVertical(settings.businessType);
   const [pendingBirthdays, setPendingBirthdays] = useState<any[]>([]);
   const [showPrompt, setShowPrompt] = useState(false);
 
@@ -30,8 +32,11 @@ export function AutomationService() {
       const template = automationTemplates.find(t => t.type === 'birthday' && t.isActive);
       if (!template) return;
 
+      // Sem telefone não há para onde mandar: aparecer na lista só gera um
+      // link do WhatsApp sem destinatário.
       const birthdays = clients.filter(c => {
         if (!c.birthDate) return false;
+        if (String(c.phone ?? '').replace(/\D/g, '').length < 10) return false;
         return c.birthDate.substring(5) === currentMonthDay;
       });
 
@@ -102,7 +107,9 @@ export function AutomationService() {
                   <div className="flex flex-col">
                     <h3 className="text-[16px] font-bold text-white tracking-tight">Aniversários de Hoje 🎂</h3>
                     <p className="text-[12px] text-ios-text-secondary">
-                      {pendingBirthdays.length} {pendingBirthdays.length === 1 ? 'cliente faz' : 'clientes fazem'} aniversário.
+                      {pendingBirthdays.length} {pendingBirthdays.length === 1
+                        ? `${vertical.clientNoun.toLowerCase()} faz`
+                        : `${vertical.clientNounPlural.toLowerCase()} fazem`} aniversário.
                     </p>
                   </div>
                 </div>

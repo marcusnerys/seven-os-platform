@@ -81,7 +81,9 @@ export default function Automation() {
 
   const sendToContact = (name: string, phone: string) => {
     const msg = campaignMessage.replace(/{{nome}}/g, name.split(' ')[0]);
-    openWhatsApp(phone, msg);
+    if (!openWhatsApp(phone, msg)) {
+      setToast({ message: `${name} não tem um telefone válido cadastrado.`, type: 'error' });
+    }
   };
 
   const handleToggle = async (template: AutomationTemplate) => {

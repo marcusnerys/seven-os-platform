@@ -72,10 +72,19 @@ export default function More() {
     }
 
     const reader = new FileReader();
+    // A gravação relança em caso de erro. Sem este try a rejeição escapava de
+    // um handler assíncrono: a linha do aviso de sucesso nunca rodava e o
+    // usuário ficava sem sinal nenhum, achando que o logo tinha subido.
     reader.onloadend = async () => {
-      const base64String = reader.result as string;
-      await updateUserAvatar(base64String);
-      setToast({ message: 'Logo atualizado com sucesso', type: 'success' });
+      try {
+        await updateUserAvatar(reader.result as string);
+        setToast({ message: 'Logo atualizado com sucesso', type: 'success' });
+      } catch {
+        setToast({ message: 'Não foi possível salvar o logo. Tente novamente.', type: 'error' });
+      }
+    };
+    reader.onerror = () => {
+      setToast({ message: 'Não foi possível ler o arquivo escolhido.', type: 'error' });
     };
     reader.readAsDataURL(file);
   };
