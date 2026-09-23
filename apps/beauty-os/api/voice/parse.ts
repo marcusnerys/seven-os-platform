@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 /**
  * Servidor do assistente de voz.
@@ -24,7 +24,48 @@ interface Res {
   json(corpo: unknown): void;
 }
 
-const MODELO = "gemini-1.5-flash";
+/**
+ * Modelos em ordem de preferência.
+ *
+ * O código apontava para gemini-1.5-flash, aposentado pelo Google: toda
+ * chamada voltava 404 e o assistente de voz não funcionava. Versão fixa
+ * quebra na aposentadoria seguinte, e só o apelido não basta — no nível
+ * gratuito ele responde 503 em horário cheio, medido aqui. Com dois, uma
+ * saturação passageira do primeiro não derruba o recurso.
+ */
+const MODELOS = ["gemini-flash-latest", "gemini-3-flash-preview"];
+
+const ESPERAS_MS = [800, 2000];
+const ehPassageiro = (erro: unknown) => {
+  const status = (erro as { status?: number })?.status;
+  return status === 429 || status === 503;
+};
+
+/**
+ * Chama o Gemini repetindo em fila cheia (429) e indisponibilidade
+ * momentânea (503), e passando para o próximo modelo quando o primeiro
+ * continua indisponível. Uma tentativa só transformava um tropeço de
+ * segundos em erro na tela.
+ */
+async function comRepeticao<T>(chamada: (modelo: string) => Promise<T>): Promise<T> {
+  let ultimoErro: unknown;
+
+  for (const modelo of MODELOS) {
+    for (let tentativa = 0; tentativa <= ESPERAS_MS.length; tentativa++) {
+      try {
+        return await chamada(modelo);
+      } catch (erro) {
+        ultimoErro = erro;
+        if (!ehPassageiro(erro)) throw erro;
+        if (tentativa < ESPERAS_MS.length) {
+          await new Promise(r => setTimeout(r, ESPERAS_MS[tentativa]));
+        }
+      }
+    }
+  }
+
+  throw ultimoErro;
+}
 
 /** Data de hoje no fuso de Brasília. A função roda em UTC, então `new Date()`
  *  sozinho vira o dia seguinte a partir das 21h no horário local. */
@@ -74,10 +115,10 @@ DADOS DO NEGÓCIO HOJE:
 
 TAREFA: Gere um briefing de boas-vindas personalizado e proativo. Seja direto, caloroso e útil. Use até 3 frases. Mencione os agendamentos do dia se houver, alerte sobre clientes inativos se relevante, e destaque o resultado financeiro se positivo. Termine com uma pergunta ou sugestão de ação concreta dentro do sistema (agendar, enviar mensagem, ver relatório). Responda em português do Brasil.`;
 
-      const response = await ai.models.generateContent({
-        model: MODELO,
+      const response = await comRepeticao(modelo => ai.models.generateContent({
+        model: modelo,
         contents: prompt,
-      });
+      }));
 
       res.status(200).json({ insight: response.text?.trim() || 'Olá! Pronto para mais um dia produtivo.' });
       return;
@@ -89,8 +130,8 @@ TAREFA: Gere um briefing de boas-vindas personalizado e proativo. Seja direto, c
       return;
     }
 
-    const response = await ai.models.generateContent({
-      model: MODELO,
+    const response = await comRepeticao(modelo => ai.models.generateContent({
+      model: modelo,
       contents: `Você é o assistente operacional (AI) do Leshanot Studio. O sistema é voltado para gestão de estética.
 Comando: "${text}"
 Contexto: ${JSON.stringify(context || {})}
@@ -118,6 +159,17 @@ Regras:
 2. Identifique nomes de clientes e serviços no contexto se possível.
 3. Se faltar dado vital (ex: valor da despesa ou hora do agendamento), use status 'incomplete'.
 4. 'message' deve ser uma resposta curta e profissional confirmando a ação ou pedindo o que falta.
+5. Preencha em 'data' TODOS os campos da ação escolhida. O que estiver só na
+   mensagem e não em 'data' é descartado pelo aplicativo, e a pessoa ouve que
+   deu certo sem nada ter acontecido.
+6. 'date' sempre no formato YYYY-MM-DD, nunca por extenso: resolva "hoje",
+   "amanhã", "sexta" e similares contra a data de hoje informada acima.
+   'time' sempre no formato HH:MM em 24 horas.
+
+Exemplo. Para "agendar corte para a Maria amanhã às 15h", com hoje sendo
+2026-03-10, a resposta correta é:
+{"action":"create_appointment","data":{"clientName":"Maria","service":"Corte","date":"2026-03-11","time":"15:00"},"message":"Agendamento de corte para Maria confirmado para 11/03 às 15:00.","status":"complete"}
+Repare que a data resolvida aparece em 'data', não só na mensagem.
 
 JSON:
 {
@@ -127,23 +179,76 @@ JSON:
   "status": "complete" | "incomplete"
 }`,
       config: {
+        // Só o tipo da resposta, sem responseSchema. O schema declarava um
+        // `data` achatado com os treze campos de todas as catorze ações, e o
+        // modelo se perdia: omitia a data resolvida ou a colava dentro de
+        // outro campo ("time":"15:00Source: 2026-09-24"). Antes disso o
+        // `data` era um OBJECT sem properties, que a saída estruturada do
+        // Gemini devolve sempre vazio — o assistente dizia "confirmado" e
+        // nada era criado, em todo comando. Sem schema, o modelo segue o
+        // formato do prompt e devolve o objeto certo de cada ação; a
+        // conferência de campos obrigatórios logo abaixo é a rede.
         responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            action: { type: Type.STRING },
-            data: { type: Type.OBJECT },
-            message: { type: Type.STRING },
-            status: { type: Type.STRING },
-          },
-          required: ["action", "message", "status"],
-        },
       },
+    }));
+
+    // O modelo às vezes embrulha o JSON em bloco de código.
+    const limpo = (response.text || '{}')
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+
+    let resultado: any;
+    try {
+      resultado = JSON.parse(limpo);
+    } catch {
+      const trecho = limpo.match(/\{[\s\S]*\}/);
+      resultado = trecho ? JSON.parse(trecho[0]) : {};
+    }
+
+    // O modelo às vezes resolve a data na frase ("amanhã, 24/09") e esquece
+    // de repetir em 'data'. voiceService descarta o comando sem os campos
+    // obrigatórios, e sem esta checagem a pessoa ouviria "confirmado" sem
+    // nada ter sido criado. Faltando campo, o comando vira 'incomplete' e o
+    // assistente pergunta o que falta.
+    const OBRIGATORIOS: Record<string, string[]> = {
+      create_appointment: ['clientName', 'date', 'time'],
+      cancel_appointment: ['clientName', 'date'],
+      create_client: ['name'],
+      create_revenue: ['amount'],
+      create_expense: ['amount'],
+      create_service: ['name', 'price'],
+      update_client_notes: ['clientName', 'notes'],
+      update_client_vip: ['clientName'],
+      send_whatsapp: ['clientName'],
+    };
+
+    const exigidos = OBRIGATORIOS[resultado?.action] ?? [];
+    const faltando = exigidos.filter(campo => {
+      const valor = resultado?.data?.[campo];
+      return valor === undefined || valor === null || valor === '';
     });
 
-    res.status(200).json(JSON.parse(response.text || "{}"));
+    if (faltando.length) {
+      const NOMES: Record<string, string> = {
+        clientName: 'o nome', name: 'o nome', date: 'a data', time: 'o horário',
+        amount: 'o valor', price: 'o preço', notes: 'a observação',
+      };
+      const pedidos = faltando.map(c => NOMES[c] ?? c);
+      resultado.status = 'incomplete';
+      resultado.message = `Faltou ${pedidos.join(' e ')}. Pode repetir incluindo isso?`;
+    }
+
+    res.status(200).json(resultado);
   } catch (error) {
     console.error("Gemini Error:", error);
+    // Fila cheia ou indisponibilidade do Gemini não é defeito daqui: devolve
+    // 503 para o front cair na resposta alternativa em vez de mostrar erro.
+    const status = (error as { status?: number })?.status;
+    if (status === 429 || status === 503) {
+      res.status(503).json({ error: 'Assistente ocupado no momento. Tente de novo em instantes.' });
+      return;
+    }
     res.status(500).json({ error: "Failed to process voice command" });
   }
 }

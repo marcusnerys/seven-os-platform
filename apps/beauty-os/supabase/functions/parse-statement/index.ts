@@ -34,6 +34,16 @@ const TIPOS_ACEITOS = [
   'image/heif',
 ];
 
+/**
+ * Modelos em ordem de preferência. O código apontava para gemini-2.0-flash,
+ * aposentado pelo Google: toda chamada voltava 404. Versão fixa quebra na
+ * aposentadoria seguinte, e só o apelido não basta — no nível gratuito ele
+ * responde 503 em horário cheio, medido contra a API. Com dois, uma
+ * saturação passageira do primeiro não derruba a leitura.
+ */
+const MODELOS = ['gemini-flash-latest', 'gemini-3-flash-preview'];
+const ESPERAS_MS = [800, 2000];
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -78,17 +88,14 @@ Regras:
 - Categorize de forma inteligente (Aluguel, Produtos, Serviço, Alimentação, Transporte, etc)
 - Retorne JSON puro sem nenhum texto antes ou depois`;
 
-    // Apelido em vez de versão fixa: o código apontava para gemini-2.0-flash,
-    // aposentado pelo Google, e toda chamada voltava 404. O apelido acompanha
-    // a versão corrente e sobrevive à próxima aposentadoria.
-    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
-
     // Toda chave do AI Studio vai na query string, inclusive as de prefixo
     // AQ., que o AI Studio passou a emitir. O código presumia que AQ. era
     // token OAuth e mandava no header Authorization: o Gemini respondia
     // "Expected OAuth 2 access token" em toda chamada. Verificado contra a
     // API com a chave do projeto: 401 como Bearer, 200 como ?key=.
-    const url = `${endpoint}?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    const urlDo = (modelo: string) =>
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}` +
+      `:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
@@ -107,14 +114,21 @@ Regras:
       generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
     });
 
-    // Uma repetição em fila cheia (429) ou indisponibilidade momentânea
-    // (503). O app trata qualquer falha daqui caindo para o OCR local, que
-    // recusa PDF — então um 503 de alguns segundos virava "tire uma foto do
-    // extrato" para quem mandou um PDF perfeitamente legível.
-    let geminiRes = await fetch(url, { method: 'POST', headers, body: corpo });
-    if (geminiRes.status === 429 || geminiRes.status === 503) {
-      await new Promise(r => setTimeout(r, 1500));
-      geminiRes = await fetch(url, { method: 'POST', headers, body: corpo });
+    // Repete em fila cheia (429) e indisponibilidade momentânea (503), e
+    // passa ao modelo seguinte se o primeiro continuar fora. O app trata
+    // qualquer falha daqui caindo para o OCR local, que recusa PDF — então
+    // um 503 de alguns segundos virava "tire uma foto do extrato" para quem
+    // mandou um PDF perfeitamente legível. Aconteceu no teste.
+    let geminiRes!: Response;
+    for (const modelo of MODELOS) {
+      for (let tentativa = 0; tentativa <= ESPERAS_MS.length; tentativa++) {
+        geminiRes = await fetch(urlDo(modelo), { method: 'POST', headers, body: corpo });
+        if (geminiRes.status !== 429 && geminiRes.status !== 503) break;
+        if (tentativa < ESPERAS_MS.length) {
+          await new Promise(r => setTimeout(r, ESPERAS_MS[tentativa]));
+        }
+      }
+      if (geminiRes.status !== 429 && geminiRes.status !== 503) break;
     }
 
     const geminiData = await geminiRes.json();
