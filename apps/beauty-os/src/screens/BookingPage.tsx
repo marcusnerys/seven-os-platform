@@ -11,20 +11,12 @@ import {
   MessageSquare,
   MessageCircle,
   Search,
-  Scissors,
-  Eye,
-  Wind,
-  Sun,
   Sparkles,
-  Heart,
-  Palette,
-  Zap,
-  Star,
   MapPin,
   ShieldCheck,
 } from 'lucide-react';
 import { Button, Toast } from '../components/UI';
-import { cn, dataLocal } from '../lib/utils';
+import { cn, dataLocal, horarioIndisponivel, agoraEmSaoPaulo } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────
@@ -36,35 +28,6 @@ interface StudioInfo {
   themeBg: 'dark' | 'light';
 }
 
-// ─── Constants ───────────────────────────────────────────
-const CATEGORIES = [
-  { id: 'all', name: 'Todos', icon: Sparkles },
-  { id: 'unhas', name: 'Unhas', icon: Scissors },
-  { id: 'cilios', name: 'Cílios', icon: Eye },
-  { id: 'cabelo', name: 'Cabelo', icon: Wind },
-  { id: 'depilacao', name: 'Depilação', icon: Zap },
-  { id: 'sobrancelha', name: 'Sobrancelha', icon: Palette },
-  { id: 'bronzeamento', name: 'Bronzeamento', icon: Sun },
-  { id: 'estetica', name: 'Estética', icon: Heart },
-  { id: 'maquiagem', name: 'Maquiagem', icon: Star },
-];
-
-const DEFAULT_SERVICES = [
-  { id: 'm1', name: 'Manicure', duration: 40, price: 50, category: 'unhas' },
-  { id: 'p1', name: 'Pedicure', duration: 50, price: 60, category: 'unhas' },
-  { id: 'a1', name: 'Alongamento em gel', duration: 120, price: 180, category: 'unhas' },
-  { id: 'b1', name: 'Blindagem', duration: 60, price: 100, category: 'unhas' },
-  { id: 'ec1', name: 'Extensão clássica', duration: 90, price: 150, category: 'cilios' },
-  { id: 'vb1', name: 'Volume brasileiro', duration: 120, price: 180, category: 'cilios' },
-  { id: 'll1', name: 'Lash lifting', duration: 60, price: 120, category: 'cilios' },
-  { id: 'cf1', name: 'Corte feminino', duration: 60, price: 120, category: 'cabelo' },
-  { id: 'e1', name: 'Escova', duration: 45, price: 80, category: 'cabelo' },
-  { id: 'co1', name: 'Coloração', duration: 120, price: 200, category: 'cabelo' },
-  { id: 'ds1', name: 'Design de sobrancelha', duration: 30, price: 50, category: 'sobrancelha' },
-  { id: 'bl1', name: 'Brow lamination', duration: 60, price: 140, category: 'sobrancelha' },
-  { id: 'lp1', name: 'Limpeza de pele', duration: 90, price: 180, category: 'estetica' },
-  { id: 'ms1', name: 'Maquiagem social', duration: 90, price: 200, category: 'maquiagem' },
-];
 
 const TIME_SLOTS = ['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00','18:00'];
 
@@ -116,10 +79,13 @@ export default function BookingPage() {
     themeAccent: '#D4AF37',
     themeBg: 'dark',
   });
-  const [services, setServices] = useState<any[]>(DEFAULT_SERVICES);
+  // null = ainda carregando. Antes o estado inicial era um catálogo fixo de
+  // 14 serviços de beleza, então um negócio sem serviços cadastrados — ou um
+  // link com id inválido — exibia esse cardápio falso e o cliente conseguia
+  // reservar por ele, criando agendamento de algo que ninguém oferece.
+  const [services, setServices] = useState<any[] | null>(null);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [clientInfo, setClientInfo] = useState({ name: '', phone: '', notes: '' });
@@ -128,17 +94,21 @@ export default function BookingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const step4EnteredAt = useRef<number>(0);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [occupiedSlots, setOccupiedSlots] = useState<string[]>([]);
+  const [occupiedSlots, setOccupiedSlots] = useState<Array<{ time: string; duration: number }>>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const colors = makeColors(studio.themeAccent, studio.themeBg);
   const availableDays = getNextDays(14);
 
+  const agora = agoraEmSaoPaulo();
+  const ehHoje = selectedDate !== null && dataLocal(selectedDate) === agora.dia;
+  const agoraEmMinutos = agora.minutos;
+
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   // ── Fetch studio info ──
   useEffect(() => {
-    if (!userId || !UUID_REGEX.test(userId)) return;
+    if (!userId || !UUID_REGEX.test(userId)) { setServices([]); return; }
     supabase.rpc('beautyos_public_settings', { p_empresa_id: userId }).then(({ data }) => {
       const s = data?.[0];
       if (s) {
@@ -151,11 +121,13 @@ export default function BookingPage() {
         });
       }
     });
-    supabase.rpc('beautyos_public_services', { p_empresa_id: userId }).then(({ data }) => {
-      if (data && data.length > 0) {
-        const list = data.map((r: any) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration, category: r.category || 'unhas' }));
-        setServices(list);
+    supabase.rpc('beautyos_public_services', { p_empresa_id: userId }).then(({ data, error }) => {
+      if (error) {
+        setServices([]);
+        setToast({ message: 'Não foi possível carregar os serviços. Recarregue a página.', type: 'error' });
+        return;
       }
+      setServices((data ?? []).map((r: any) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration, })));
     });
   }, [userId]);
 
@@ -163,16 +135,22 @@ export default function BookingPage() {
   useEffect(() => {
     if (!selectedDate || !userId) return;
     const dateStr = dataLocal(selectedDate);
-    supabase.rpc('beautyos_public_slots', { p_empresa_id: userId, p_date: dateStr }).then(({ data }) => {
-      setOccupiedSlots((data ?? []).map((r: any) => r.time));
+    // Guarda a duração junto: só o horário de início não basta para saber que
+    // um atendimento de 120 min às 08:00 também ocupa as 09:00.
+    setOccupiedSlots([]);
+    supabase.rpc('beautyos_public_slots', { p_empresa_id: userId, p_date: dateStr }).then(({ data, error }) => {
+      if (error) {
+        setToast({ message: 'Não foi possível verificar os horários. Recarregue a página.', type: 'error' });
+        return;
+      }
+      setOccupiedSlots((data ?? []).map((r: any) => ({ time: r.time, duration: Number(r.duration) || 60 })));
     });
   }, [selectedDate, userId]);
 
-  const filteredServices = useMemo(() => services.filter(s => {
+  const filteredServices = useMemo(() => (services ?? []).filter(s => {
     const matchSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchCat = activeCategory === 'all' || s.category === activeCategory;
-    return matchSearch && matchCat;
-  }), [services, searchQuery, activeCategory]);
+    return matchSearch;
+  }), [services, searchQuery]);
 
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhone(e.target.value);
@@ -185,8 +163,12 @@ export default function BookingPage() {
     // honeypot: bots preenchem o campo oculto, humanos não
     if (honeypot) return;
 
-    // tempo mínimo de 2s na etapa de confirmação
-    if (Date.now() - step4EnteredAt.current < 2000) return;
+    // Tempo mínimo de 2s na etapa de confirmação. Sem o aviso, o clique
+    // simplesmente não fazia nada e o visitante ficava sem saber se enviou.
+    if (Date.now() - step4EnteredAt.current < 2000) {
+      setToast({ message: 'Só um instante, confirmando seus dados...', type: 'error' });
+      return;
+    }
 
     // cooldown: bloqueia nova tentativa por 60s após envio
     const COOLDOWN_KEY = `booking_cooldown_${userId}`;
@@ -392,32 +374,43 @@ export default function BookingPage() {
                 />
               </div>
 
-              {/* Categories */}
-              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar -mx-5 px-5">
-                {CATEGORIES.map(cat => {
-                  const Icon = cat.icon;
-                  const isActive = activeCategory === cat.id;
-                  return (
-                    <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-full whitespace-nowrap text-[13px] font-bold border transition-all active:scale-95 shrink-0"
-                      style={{
-                        background: isActive ? colors.accent : colors.surface,
-                        borderColor: isActive ? colors.accent : colors.border,
-                        color: isActive ? colors.accentText : colors.textSecondary,
-                      }}
-                    >
-                      <Icon size={14} />
-                      {cat.name}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* A barra de categorias saiu daqui. beautyos_services não tem
+                  coluna category, então todo serviço caía no rótulo padrão
+                  "unhas" e escolher qualquer outra aba devolvia lista vazia
+                  para todo mundo. Fora que a lista era de salão: uma oficina
+                  publicava a própria página oferecendo Cílios e Depilação.
+                  A busca por nome já cobre catálogos desse tamanho. */}
 
               {/* Service list */}
+              {services === null && (
+                <div className="py-16 flex justify-center">
+                  <div className="w-8 h-8 border-2 rounded-full animate-spin"
+                    style={{ borderColor: `${colors.accent}30`, borderTopColor: colors.accent }} />
+                </div>
+              )}
+
+              {services !== null && services.length === 0 && (
+                <div className="py-14 text-center px-6">
+                  <p className="text-[15px] font-bold" style={{ color: colors.textPrimary }}>
+                    Este estabelecimento ainda não publicou os serviços
+                  </p>
+                  <p className="text-[13px] mt-2 leading-relaxed" style={{ color: colors.textSecondary }}>
+                    Entre em contato direto para marcar seu horário.
+                  </p>
+                </div>
+              )}
+
+              {services !== null && services.length > 0 && filteredServices.length === 0 && (
+                <div className="py-14 text-center px-6">
+                  <p className="text-[14px]" style={{ color: colors.textSecondary }}>
+                    Nenhum serviço encontrado para essa busca.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col gap-3">
                 {filteredServices.map(service => {
-                  const catInfo = CATEGORIES.find(c => c.id === service.category);
-                  const Icon = catInfo?.icon || Sparkles;
+                  const Icon = Sparkles;
                   return (
                     <motion.button
                       key={service.id}
@@ -444,9 +437,6 @@ export default function BookingPage() {
                     </motion.button>
                   );
                 })}
-                {filteredServices.length === 0 && (
-                  <p className="text-center py-16 text-[14px]" style={{ color: colors.textSecondary }}>Nenhum serviço encontrado.</p>
-                )}
               </div>
             </motion.div>
           )}
@@ -524,7 +514,18 @@ export default function BookingPage() {
 
               <div className="grid grid-cols-3 gap-3">
                 {TIME_SLOTS.map(slot => {
-                  const occupied = occupiedSlots.includes(slot);
+                  // Um atendimento de 120 min às 08:00 também ocupa as 09:00.
+                  // Antes só o horário de início ficava bloqueado, então a
+                  // pessoa escolhia 09:00, preenchia tudo e só no envio ouvia
+                  // que o horário estava tomado — voltando para uma tela que
+                  // continuava mostrando 09:00 livre.
+                  const occupied = horarioIndisponivel(
+                    slot,
+                    selectedService?.duration ?? 60,
+                    occupiedSlots,
+                    ehHoje,
+                    agoraEmMinutos
+                  );
                   const selected = selectedTime === slot;
                   return (
                     <button

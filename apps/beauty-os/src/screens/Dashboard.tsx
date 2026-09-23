@@ -7,11 +7,18 @@ import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 import { cn, dataLocal } from '../lib/utils';
 import { useStore } from '../lib/store';
+import { getVertical } from '../lib/vertical';
 import { useWeather } from '../hooks/useWeather';
 
 export default function Dashboard() {
   const { setActiveTab, setModalToOpen, updateUserAvatar, getRevenueData, getRevenueForecast, getSmartInsight, clients, appointments, transactions, user, notifications, markNotificationAsRead, automationTemplates, setShowDevTools, settings } = useStore();
   const themeBg = useStore(state => state.themeBg);
+  // Esta tela era a única que ignorava a vertical: falava sempre em cliente e
+  // agendamento. Em Finanças Pessoais a navegação já esconde Agenda e
+  // Clientes, mas o início continuava oferecendo os dois — e os atalhos
+  // levavam a uma aba que o App devolve no mesmo instante.
+  const vertical = getVertical(settings.businessType);
+  const agenda = vertical.hasScheduling;
   // O tema claro é pintado por variável do Tailwind que não muda em runtime,
   // então a cor do texto precisa ser calculada aqui. Sem isto, texto branco
   // ficava sobre fundo quase branco (contraste 1.12, ilegível).
@@ -58,9 +65,18 @@ export default function Dashboard() {
     }
 
     const reader = new FileReader();
+    // Aqui não havia aviso nenhum, nem de sucesso nem de falha: trocar a foto
+    // e não ver nada acontecer era indistinguível de um erro de gravação.
     reader.onloadend = async () => {
-      const base64String = reader.result as string;
-      await updateUserAvatar(base64String);
+      try {
+        await updateUserAvatar(reader.result as string);
+        setLocalToast({ message: 'Foto atualizada', type: 'success' });
+      } catch {
+        setLocalToast({ message: 'Não foi possível salvar a foto. Tente novamente.', type: 'error' });
+      }
+    };
+    reader.onerror = () => {
+      setLocalToast({ message: 'Não foi possível ler o arquivo escolhido.', type: 'error' });
     };
     reader.readAsDataURL(file);
   };
@@ -124,7 +140,9 @@ export default function Dashboard() {
       empresa: settings.studioName || 'Meu Negócio'
     });
 
-    openWhatsApp(client.phone, message);
+    if (!openWhatsApp(client.phone, message)) {
+      setLocalToast({ message: `${client.name} não tem telefone cadastrado.`, type: 'error' });
+    }
   };
 
   const handleBulkReminders = () => {
@@ -145,7 +163,9 @@ export default function Dashboard() {
       empresa: settings.studioName || 'Meu Negócio'
     });
 
-    openWhatsApp(phone, message);
+    if (!openWhatsApp(phone, message)) {
+      setLocalToast({ message: 'O primeiro agendamento de amanhã não tem telefone cadastrado.', type: 'error' });
+    }
   };
 
   return (
@@ -291,7 +311,7 @@ export default function Dashboard() {
       </GlassCard>
 
       {/* Birthday Banner */}
-      {birthdaysToday.length > 0 && (
+      {agenda && birthdaysToday.length > 0 && (
         <motion.div
            initial={{ opacity: 0, scale: 0.95 }}
            animate={{ opacity: 1, scale: 1 }}
@@ -317,7 +337,7 @@ export default function Dashboard() {
              </div>
              {birthdaysToday.length > 1 && (
                 <p className="text-[10px] text-ios-text-secondary font-medium">
-                   + {birthdaysToday.length - 1} clientes também fazem aniversário hoje.
+                   + {birthdaysToday.length - 1} {vertical.clientNounPlural.toLowerCase()} também fazem aniversário hoje.
                 </p>
              )}
           </GlassCard>
@@ -325,7 +345,7 @@ export default function Dashboard() {
       )}
 
       {/* Reminder Banner */}
-      {tomorrowAppointments.length > 0 && (
+      {agenda && tomorrowAppointments.length > 0 && (
         <motion.div
            initial={{ opacity: 0, scale: 0.95 }}
            animate={{ opacity: 1, scale: 1 }}
@@ -389,10 +409,14 @@ export default function Dashboard() {
       {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-[12px]">
         {[
-          { label: 'Clientes', value: clients.length.toString(), icon: Users, color: 'gold', tab: 'clients' },
-          { label: 'Hoje', value: todayAppointments.length.toString(), icon: Calendar, color: 'gold', tab: 'agenda' },
-          { label: 'Projeção/Mês', value: `R$ ${revenueForecast.toFixed(0)}`, icon: TrendingUp, color: 'cyan', tab: 'agenda' },
-          { label: 'Agenda Total', value: appointments.length.toString(), icon: UserPlus, color: 'gold', tab: 'agenda' },
+          ...(agenda ? [
+            { label: vertical.clientNounPlural, value: clients.length.toString(), icon: Users, color: 'gold', tab: 'clients' },
+            { label: 'Hoje', value: todayAppointments.length.toString(), icon: Calendar, color: 'gold', tab: 'agenda' },
+          ] : []),
+          { label: 'Projeção/Mês', value: `R$ ${revenueForecast.toFixed(0)}`, icon: TrendingUp, color: 'cyan', tab: 'financial' },
+          ...(agenda
+            ? [{ label: 'Agenda Total', value: appointments.length.toString(), icon: UserPlus, color: 'gold', tab: 'agenda' }]
+            : [{ label: 'Lançamentos', value: transactions.length.toString(), icon: DollarSign, color: 'gold', tab: 'financial' }]),
         ].map((kpi, i) => (
           <GlassCard 
             key={i} 
@@ -412,10 +436,13 @@ export default function Dashboard() {
          <h2 className="text-[10px] font-bold tracking-[0.5px] uppercase text-ios-text-secondary px-1">Atalhos rápidos</h2>
          <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
             {[
-              { id: 'appointment', label: 'Novo agendamento', icon: PlusCircle, tab: 'agenda' },
-              { id: 'client', label: 'Nova cliente', icon: UserPlus, tab: 'clients' },
+              ...(agenda ? [
+                { id: 'appointment', label: 'Novo agendamento', icon: PlusCircle, tab: 'agenda' },
+                { id: 'client', label: `Nov${vertical.clientGender === 'f' ? 'a' : 'o'} ${vertical.clientNoun.toLowerCase()}`, icon: UserPlus, tab: 'clients' },
+              ] : []),
               { id: 'revenue', label: 'Registrar venda', icon: DollarSign, tab: 'financial' },
-              { id: 'agenda', label: 'Ver agenda', icon: Calendar, tab: 'agenda' },
+              { id: 'expense', label: 'Registrar despesa', icon: TrendingUp, tab: 'financial' },
+              ...(agenda ? [{ id: 'agenda', label: 'Ver agenda', icon: Calendar, tab: 'agenda' }] : []),
             ].map((action, i) => (
               <div 
                 key={i} 

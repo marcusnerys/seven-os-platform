@@ -66,6 +66,12 @@ function parseAmount(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/** Rejeita data que não existe no calendário: 31/02, 00/08, ano truncado. */
+function ehDataReal(iso: string): boolean {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
+}
+
 /** Extrai uma data da linha e devolve ISO + a linha sem a data. */
 function extractDate(line: string, fallbackISO: string): { iso: string; rest: string } {
   // 2026-08-27
@@ -74,15 +80,24 @@ function extractDate(line: string, fallbackISO: string): { iso: string; rest: st
     return { iso: isoMatch[0], rest: line.replace(isoMatch[0], ' ') };
   }
 
-  // 27/08/2026, 27/08/26, 27/08, 27-08
-  const brMatch = line.match(/\b(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?\b/);
+  // 27/08/2026, 27.08.2026, 27-08-26 — três partes, separador repetido.
+  // Depois 27/08 e 27-08 — duas partes, sem ponto. O ponto de duas partes é
+  // ambíguo com valor monetário e o Tesseract troca vírgula por ponto o tempo
+  // todo: "R$ 8,10" chegava como "8.10", virava dia 8 do mês 10, o valor
+  // sumia da linha e o lançamento era descartado sem aviso.
+  const brMatch =
+    line.match(/\b(\d{1,2})([/.\-])(\d{1,2})\2(\d{4}|\d{2})\b/) ||
+    line.match(/\b(\d{1,2})([/\-])(\d{1,2})\b/);
+
   if (brMatch) {
-    const day = brMatch[1].padStart(2, '0');
-    const month = brMatch[2].padStart(2, '0');
-    if (Number(month) >= 1 && Number(month) <= 12 && Number(day) >= 1 && Number(day) <= 31) {
-      let year = brMatch[3] ?? fallbackISO.slice(0, 4);
-      if (year.length === 2) year = `20${year}`;
-      return { iso: `${year}-${month}-${day}`, rest: line.replace(brMatch[0], ' ') };
+    const [trecho, dia, , mes, ano] = brMatch;
+    const year = ano === undefined
+      ? fallbackISO.slice(0, 4)
+      : ano.length === 2 ? `20${ano}` : ano;
+
+    const iso = `${year}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+    if (ehDataReal(iso)) {
+      return { iso, rest: line.replace(trecho, ' ') };
     }
   }
 

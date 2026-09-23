@@ -59,4 +59,58 @@ for (const [linha, esperado] of milhar) {
   assert.strictEqual(tx.amount, esperado, `${linha.trim()} -> esperado ${esperado}, veio ${tx.amount}`);
 }
 
+// Data e valor disputam os mesmos caracteres. O Tesseract troca vírgula por
+// ponto com frequência, então "R$ 8,10" chega como "8.10" — e o extrator de
+// data lia isso como dia 8, mês 10: engolia o valor e a linha era descartada
+// sem aviso. Separador de data de duas partes agora é só barra ou hífen.
+const valorViraData = [
+  ['PAGAMENTO TARIFA BANCO 8.10',  8.10],
+  ['PIX RECEBIDO JOAO 10.12',     10.12],
+  ['COMPRA MERCADO 12.05',        12.05],
+];
+
+for (const [linha, esperado] of valorViraData) {
+  const [tx] = parseStatementText(linha, TODAY);
+  assert.ok(tx, `linha descartada: ${linha}`);
+  assert.strictEqual(tx.amount, esperado, `${linha} -> esperado ${esperado}, veio ${tx.amount}`);
+  assert.strictEqual(tx.date, TODAY, `${linha} -> valor virou data ${tx.date}`);
+}
+
+// Data que não existe no calendário. Ia para o banco como "2026-02-31" e a
+// coluna date recusa, derrubando a importação inteira.
+const dataImpossivel = [
+  '31/02/2026  CONTA DE LUZ  89,90',
+  '00/08/2026  BOLETO        50,00',
+  '30/02       TARIFA        12,00',
+];
+
+for (const linha of dataImpossivel) {
+  const [tx] = parseStatementText(linha, TODAY);
+  assert.ok(tx, `linha descartada: ${linha}`);
+  assert.strictEqual(tx.date, TODAY, `${linha.trim()} -> aceitou data invalida ${tx.date}`);
+}
+
+// Ano truncado pelo OCR: descarta só o ano e usa o do extrato, em vez de
+// montar "202-08-27" e mandar isso para a coluna date.
+{
+  const [tx] = parseStatementText('27/08/202   BOLETO        50,00', TODAY);
+  assert.ok(tx, 'linha descartada: ano truncado');
+  assert.strictEqual(tx.date, '2026-08-27');
+}
+
+// Toda data produzida precisa existir no calendário.
+for (const linha of [...dataImpossivel, '31/12/2026 X 10,00', '29/02/2024 Y 10,00']) {
+  const [tx] = parseStatementText(linha, TODAY);
+  const d = new Date(`${tx.date}T00:00:00Z`);
+  assert.strictEqual(d.toISOString().slice(0, 10), tx.date, `data irreal: ${tx.date}`);
+}
+
+// Data separada por ponto nas três partes continua válida.
+{
+  const [tx] = parseStatementText('27.08.2026  SAQUE  100,00', TODAY);
+  assert.ok(tx, 'nao extraiu 27.08.2026');
+  assert.strictEqual(tx.date, '2026-08-27');
+  assert.strictEqual(tx.amount, 100);
+}
+
 console.log('\nOK — parser passou em todos os asserts');

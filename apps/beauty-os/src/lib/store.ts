@@ -39,6 +39,10 @@ export interface Appointment {
   notes?: string;
 }
 
+/** Quando um cliente vira VIP. Só promove: ninguém perde o selo. */
+const VISITAS_PARA_VIP = 5;
+const GASTO_PARA_VIP = 500;
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -664,11 +668,19 @@ export const useStore = create<AppStore>()(
             if (appointment.clientId && appointment.clientId !== 'public-booking') {
               const client = get().clients.find(c => c.id === appointment.clientId);
               if (client) {
+                const visitas = (client.visits || 0) + 1;
+                const gasto = (client.spent || 0) + appointment.price;
+
                 await updateClient(appointment.clientId, {
-                  spent: (client.spent || 0) + appointment.price,
-                  visits: (client.visits || 0) + 1,
+                  spent: gasto,
+                  visits: visitas,
                   lastVisit: appointment.date,
-                  isVIP: (client.visits || 0) + 1 >= 5,
+                  // VIP é conquista, não estado recalculado. Antes eram duas
+                  // regras em telas diferentes: a de Clientes promovia por
+                  // gasto e esta rebaixava por visita, então quem passava dos
+                  // R$ 500 com menos de cinco visitas perdia o VIP no
+                  // atendimento seguinte, sem nada na tela explicando.
+                  isVIP: client.isVIP || visitas >= VISITAS_PARA_VIP || gasto >= GASTO_PARA_VIP,
                 });
               }
             }
