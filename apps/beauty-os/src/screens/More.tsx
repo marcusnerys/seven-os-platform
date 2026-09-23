@@ -547,7 +547,11 @@ export default function More() {
               </div>
             }
           >
-            <div className="w-full h-[60vh] rounded-2xl overflow-hidden bg-white/5 border border-white/10">
+            {/* A altura precisa caber no espaço do modal, não na janela inteira.
+                Com 60vh puro, em tela curta o iframe passava por baixo do rodapé
+                do modal (que é absolute bottom-0) e escondia o botão de avançar
+                da própria página de agendamento. Desconta cabeçalho e rodapé. */}
+            <div className="w-full h-[min(60vh,calc(95vh-260px))] rounded-2xl overflow-hidden bg-white/5 border border-white/10">
               <iframe
                 src={browserUrl}
                 className="w-full h-full border-none"
