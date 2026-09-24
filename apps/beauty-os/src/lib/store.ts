@@ -245,9 +245,23 @@ interface AppStore {
   setShowDevTools: (show: boolean) => void;
 }
 
+/**
+ * Tamanho máximo da foto escolhida, antes da redução. Foto de iPhone passa
+ * fácil de 5 MB (o limite antigo) — a de 48 MP chega a 12 MB. O que vai para
+ * o armazenamento é a versão reduzida, na casa dos 100 KB.
+ */
+export const TAMANHO_MAXIMO_FOTO = 20 * 1024 * 1024;
+
+/** Mensagem de quando o aparelho não consegue abrir o formato da foto. */
+export const ERRO_FORMATO_FOTO = 'Não consegui abrir essa imagem. Tente uma foto em JPG ou PNG.';
+
 /** Reduz a imagem para no máximo `lado` pixels e devolve um JPEG leve. */
 async function reduzirImagem(arquivo: File, lado: number): Promise<Blob> {
-  const bitmap = await createImageBitmap(arquivo);
+  // HEIC do iPhone só abre onde o navegador sabe decodificar (Safari recente).
+  // Em outros, falha aqui — com uma mensagem que diz o que fazer.
+  const bitmap = await createImageBitmap(arquivo).catch(() => {
+    throw new Error(ERRO_FORMATO_FOTO);
+  });
   const escala = Math.min(1, lado / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bitmap.width * escala);
@@ -909,8 +923,10 @@ export const useStore = create<AppStore>()(
         updateUserAvatar: async (arquivo) => {
           const user = get().user;
           if (!user) return;
+          // Fora do try: erro de formato chega à tela com a própria mensagem,
+          // em vez de virar o aviso genérico de falha ao salvar.
+          const imagem = await reduzirImagem(arquivo, 512);
           try {
-            const imagem = await reduzirImagem(arquivo, 512);
             const caminho = `${user.id}/logo-${Date.now()}.jpg`;
             const { error: erroUpload } = await supabase.storage
               .from('beautyos-logos')

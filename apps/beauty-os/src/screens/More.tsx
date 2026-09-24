@@ -23,7 +23,7 @@ import { cn, dataLocal, escapeICS, fimDoEventoICS, digitosTelefoneBR, formatarTe
 import { applyTheme } from '../components/ThemeOnboarding';
 
 import { supabase } from '../lib/supabase';
-import { useStore } from '../lib/store';
+import { useStore, TAMANHO_MAXIMO_FOTO, ERRO_FORMATO_FOTO } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 
 const ACCENT_COLORS = [
@@ -60,14 +60,16 @@ export default function More() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setToast({ message: 'Apenas imagens JPEG, PNG, WebP ou GIF são permitidas', type: 'error' });
+    // HEIC é o formato padrão da câmera do iPhone e era recusado aqui. Alguns
+    // navegadores entregam o HEIC sem tipo, então a extensão também vale.
+    const ehImagem = file.type.startsWith('image/') || /\.(heic|heif)$/i.test(file.name);
+    if (!ehImagem) {
+      setToast({ message: 'Escolha um arquivo de imagem (foto do celular, JPG ou PNG).', type: 'error' });
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setToast({ message: 'A imagem deve ter menos de 5MB', type: 'error' });
+    if (file.size > TAMANHO_MAXIMO_FOTO) {
+      setToast({ message: 'A imagem deve ter menos de 20 MB.', type: 'error' });
       return;
     }
 
@@ -77,8 +79,9 @@ export default function More() {
     try {
       await updateUserAvatar(file);
       setToast({ message: 'Logo atualizado com sucesso', type: 'success' });
-    } catch {
-      setToast({ message: 'Não foi possível salvar o logo. Tente novamente.', type: 'error' });
+    } catch (erro) {
+      const formato = erro instanceof Error && erro.message === ERRO_FORMATO_FOTO;
+      setToast({ message: formato ? ERRO_FORMATO_FOTO : 'Não foi possível salvar o logo. Tente novamente.', type: 'error' });
     }
   };
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
