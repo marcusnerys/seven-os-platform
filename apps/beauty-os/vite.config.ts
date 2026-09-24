@@ -14,9 +14,9 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'icon.svg'],
         manifest: {
-          name: 'Leshanot Studio',
+          name: 'Leshanot OS',
           short_name: 'Leshanot',
-          description: 'Luxury Beauty Management Platform',
+          description: 'Gestão para pequenos negócios',
           theme_color: '#0B0B0D',
           background_color: '#0B0B0D',
           display: 'standalone',
@@ -32,9 +32,6 @@ export default defineConfig(({mode}) => {
         }
       })
     ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

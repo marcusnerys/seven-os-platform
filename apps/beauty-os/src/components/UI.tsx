@@ -144,7 +144,7 @@ export function PWAInstallPrompt() {
              <span className="text-ios-gold font-bold text-xl">L</span>
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-white">Instalar Leshanot Studio</h3>
+            <h3 className="text-sm font-bold text-white">Instalar Leshanot OS</h3>
             <p className="text-[11px] text-ios-text-secondary leading-tight mt-0.5">Adicione à sua tela inicial para uma experiência de app nativo.</p>
           </div>
           <button onClick={() => setShow(false)} className="text-ios-text-secondary p-1">

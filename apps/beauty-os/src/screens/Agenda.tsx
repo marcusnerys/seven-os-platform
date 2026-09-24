@@ -5,12 +5,14 @@ import { Logo } from '../components/Logo';
 import { Plus, ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon, User, MessageCircle, Trash2, X, CalendarPlus, Download } from 'lucide-react';
 import { cn, dataLocal, escapeICS, fimDoEventoICS } from '../lib/utils';
 import { useStore, Appointment } from '../lib/store';
+import { getVertical } from '../lib/vertical';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
 export default function Agenda() {
   const { appointments, clients, addAppointment, updateAppointment, updateAppointmentStatus, completeAppointment, isSlotAvailable, deleteAppointment, addTransaction, modalToOpen, modalData, setToast, setModalToOpen, automationTemplates } = useStore();
   const themeBg = useStore(state => state.themeBg);
   const settings = useStore(state => state.settings);
+  const vertical = getVertical(settings.businessType);
   const isLight = themeBg === 'light';
   const textPrimary = isLight ? '#1C1C1E' : '#F5F5F7';
   const textSecondary = isLight ? '#6B6B70' : '#8E8E93';
@@ -692,7 +694,7 @@ export default function Agenda() {
                   value={newAppt.clientId}
                   onChange={e => setNewAppt({ ...newAppt, clientId: e.target.value })}
                 >
-                  <option value="" className="bg-[#121214]">Selecione uma cliente...</option>
+                  <option value="" className="bg-[#121214]">Selecione {vertical.clientGender === 'f' ? 'uma' : 'um'} {vertical.clientNoun.toLowerCase()}...</option>
                   {clients.map(c => <option key={c.id} value={c.id} className="bg-[#121214]">{c.name}</option>)}
                 </select>
               </div>
@@ -702,7 +704,7 @@ export default function Agenda() {
                   <label className="text-[11px] font-bold text-ios-text-secondary uppercase px-1">Serviço</label>
                   <Input 
                     voice
-                    placeholder="Ex: Microblading" 
+                    placeholder={`Nome do ${vertical.serviceNoun.toLowerCase()}`} 
                     value={newAppt.service}
                     onChange={e => setNewAppt({ ...newAppt, service: e.target.value })}
                   />

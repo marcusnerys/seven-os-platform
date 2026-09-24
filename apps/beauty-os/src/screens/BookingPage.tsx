@@ -73,7 +73,7 @@ export default function BookingPage() {
   const userId = routeUserId ?? pathname.split('/book/')[1]?.split(/[/?#]/)[0];
   const [step, setStep] = useState(1); // 1=Serviço, 2=Data, 3=Horário, 4=Dados
   const [studio, setStudio] = useState<StudioInfo>({
-    studioName: 'Studio',
+    studioName: '',
     location: '',
     avatarUrl: '',
     themeAccent: '#D4AF37',
@@ -115,7 +115,7 @@ export default function BookingPage() {
       const s = data?.[0];
       if (s) {
         setStudio({
-          studioName: s.studio_name || 'Studio',
+          studioName: s.studio_name || 'Agendamento online',
           location: s.location || '',
           avatarUrl: s.avatar_url || '',
           themeAccent: s.theme_accent || '#D4AF37',
@@ -140,13 +140,18 @@ export default function BookingPage() {
     // Guarda a duração junto: só o horário de início não basta para saber que
     // um atendimento de 120 min às 08:00 também ocupa as 09:00.
     setOccupiedSlots([]);
+    // Resposta de uma data já trocada é descartada. No 4G, tocar em segunda e
+    // logo em terça podia terminar com terça mostrando a ocupação de segunda.
+    let ativo = true;
     supabase.rpc('beautyos_public_slots', { p_empresa_id: userId, p_date: dateStr }).then(({ data, error }) => {
+      if (!ativo) return;
       if (error) {
         setToast({ message: 'Não foi possível verificar os horários. Recarregue a página.', type: 'error' });
         return;
       }
       setOccupiedSlots((data ?? []).map((r: any) => ({ time: r.time, duration: Number(r.duration) || 60 })));
     });
+    return () => { ativo = false; };
   }, [selectedDate, userId, versaoHorarios]);
 
   // Trocar a data ou o serviço invalida o horário escolhido. Antes ele

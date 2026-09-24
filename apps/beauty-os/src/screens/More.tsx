@@ -107,8 +107,13 @@ export default function More() {
       setToast({ message: 'Sincronização de contatos disponível apenas no navegador móvel (Chrome Android)', type: 'error' });
       return;
     }
+    // Um toque de cada vez: a importação grava contato por contato, e um
+    // segundo toque no meio duplicava a lista inteira.
+    if (loadingAction) return;
     try {
-      setLoadingAction('import-contacts');
+      // Mesma chave que a lista usa para mostrar o carregamento; com outra,
+      // o spinner nunca aparecia durante dezenas de segundos.
+      setLoadingAction('Importar Contatos do Celular');
       const picked = await nav.contacts.select(['name', 'tel', 'email'], { multiple: true });
       if (!picked || picked.length === 0) return;
       // Compara só os dígitos nacionais. O telefone importado era gravado
@@ -257,8 +262,12 @@ export default function More() {
     {
       title: 'Negócio',
       items: [
-        { label: vertical.serviceNounPlural, icon: Tag, color: 'text-ios-gold', action: () => setIsServicesOpen(true), badge: services.length.toString() },
+        // Serviços, contatos e agenda só existem com agendamento. Em Finanças
+        // Pessoais o item virava "Categorias", pedia preço e minutos e não
+        // tinha efeito nenhum; importar contatos gravava gente numa tela que
+        // essa vertical esconde.
         ...(vertical.hasScheduling ? [
+          { label: vertical.serviceNounPlural, icon: Tag, color: 'text-ios-gold', action: () => setIsServicesOpen(true), badge: services.length.toString() },
           { label: 'Link de Agendamento', icon: Globe, color: 'text-ios-cyan', action: openInAppBrowser },
           { label: 'Automação WhatsApp', icon: MessageCircle, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('automation') },
         ] : []),
@@ -267,8 +276,8 @@ export default function More() {
     {
       title: 'Ferramentas',
       items: [
-        { label: 'Importar Contatos do Celular', icon: Users, color: 'text-ios-cyan', action: importPhoneContacts },
         ...(vertical.hasScheduling ? [
+          { label: 'Importar Contatos do Celular', icon: Users, color: 'text-ios-cyan', action: importPhoneContacts },
           { label: 'Exportar Agenda p/ Calendário', icon: CalendarDays, color: 'text-ios-gold', action: exportCalendar, badge: String(appointments.filter(a => a.date >= dataLocal() && a.status !== 'Cancelado').length) },
         ] : []),
       ]

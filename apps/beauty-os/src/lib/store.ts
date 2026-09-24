@@ -283,6 +283,9 @@ export const useStore = create<AppStore>()(
     (set, get) => {
       let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
       const concluindo = new Set<string>();
+      // Receita já lançada nesta sessão, por agendamento. Se a receita entra
+      // e o passo seguinte falha, a nova tentativa não pode lançar de novo.
+      const receitaLancada = new Set<string>();
 
       const stopListeners = () => {
         if (realtimeChannel) {
@@ -775,13 +778,22 @@ export const useStore = create<AppStore>()(
             // lançado — e o botão de concluir some depois disso, então não havia
             // como refazer. Falhando primeiro, o agendamento continua
             // "Confirmado" e a pessoa pode tentar de novo.
-            await addTransaction({
-              amount: appointment.price,
-              type: 'revenue',
-              category: 'Serviço',
-              date: appointment.date,
-              description: `Conclusão: ${appointment.service} - ${appointment.clientName || 'Cliente'}`,
-            });
+            // Tentar de novo depois de "Erro ao concluir" lançava a receita
+            // outra vez: ela tinha entrado e só o passo seguinte falhara.
+            const descricao = `Conclusão: ${appointment.service} - ${appointment.clientName || 'Cliente'}`;
+            const jaLancada = receitaLancada.has(id) || get().transactions.some(t =>
+              t.type === 'revenue' && t.date === appointment.date && t.description === descricao && t.amount === appointment.price
+            );
+            if (!jaLancada) {
+              await addTransaction({
+                amount: appointment.price,
+                type: 'revenue',
+                category: 'Serviço',
+                date: appointment.date,
+                description: descricao,
+              });
+              receitaLancada.add(id);
+            }
 
             await updateAppointmentStatus(id, 'Concluído');
 

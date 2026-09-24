@@ -144,7 +144,21 @@ export default async function handler(req: Req, res: Res): Promise<void> {
 
     // --- INSIGHT MODE: proactive routine briefing ---
     if (mode === 'insight') {
-      const { todayAppointments = [], inactiveClients = [], recentRevenue = 0, recentExpenses = 0, totalClients = 0 } = storeSnapshot || {};
+      const { todayAppointments = [], inactiveClients = [], recentRevenue = 0, recentExpenses = 0, totalClients = 0, hasScheduling = true } = storeSnapshot || {};
+
+      // Finanças pessoais: sem agenda nem clientes. O briefing sugeria agendar
+      // e cadastrar clientes para quem usa o app só para controlar gastos.
+      if (hasScheduling === false) {
+        const promptPessoal = `Você é a IA do Leshanot OS, usada aqui como controle de finanças pessoais (sem clientes nem agenda).
+Hoje é ${todayString}.
+- Receitas nos últimos 7 dias: R$ ${Number(recentRevenue).toFixed(2)}
+- Despesas nos últimos 7 dias: R$ ${Number(recentExpenses).toFixed(2)}
+
+TAREFA: Até 2 frases, em português do Brasil, calorosas e diretas, sobre como estão as finanças da semana. Termine sugerindo registrar um gasto, uma receita ou ver o resumo do mês. Não fale de clientes, agendamentos ou atendimentos.`;
+        const r = await comRepeticao(modelo => ai.models.generateContent({ model: modelo, contents: promptPessoal }));
+        res.status(200).json({ insight: r.text?.trim() || 'Olá! Como posso ajudar com suas finanças?' });
+        return;
+      }
 
       const prompt = `Você é a IA operacional do Leshanot OS — um sistema de gestão para pequenos negócios (salões, oficinas, prestadores de serviço).
 Hoje é ${todayString}.

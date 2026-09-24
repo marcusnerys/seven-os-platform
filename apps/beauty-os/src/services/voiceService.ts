@@ -1,4 +1,5 @@
 import { useStore } from '../lib/store';
+import { getVertical } from '../lib/vertical';
 import { supabase } from '../lib/supabase';
 import { dataLocal, acharPorNome, semAcento, digitosTelefoneBR, formatarTelefoneBR } from '../lib/utils';
 import { openWhatsApp } from '../lib/whatsapp';
@@ -70,6 +71,7 @@ export function useVoiceAssistant() {
             recentRevenue,
             recentExpenses,
             totalClients: store.clients.length,
+            hasScheduling: getVertical(store.settings.businessType).hasScheduling,
           },
         }),
       });
@@ -81,7 +83,9 @@ export function useVoiceAssistant() {
       if (todayAppointments.length > 0) {
         return `Você tem ${todayAppointments.length} agendamento${todayAppointments.length > 1 ? 's' : ''} hoje. Como posso ajudar?`;
       }
-      return 'Olá! Agenda livre hoje. Como posso ajudar?';
+      return getVertical(store.settings.businessType).hasScheduling
+        ? 'Olá! Agenda livre hoje. Como posso ajudar?'
+        : 'Olá! Como posso ajudar com suas finanças?';
     }
   };
 
@@ -145,6 +149,15 @@ export function useVoiceAssistant() {
     const informar = (mensagem: string): ResultadoExecucao => ({ mensagem, pergunta: false });
 
     const data = result.data || {};
+
+    // Finanças Pessoais não tem agenda nem clientes: o comando era gravado e
+    // o app mandava para uma aba que essa vertical esconde, com o assistente
+    // dizendo que tinha dado certo.
+    const SO_COM_AGENDA = ['create_appointment', 'cancel_appointment', 'create_client', 'update_client_notes',
+      'update_client_vip', 'create_service', 'search_client', 'send_whatsapp', 'list_inactive_clients'];
+    if (!getVertical(store.settings.businessType).hasScheduling && SO_COM_AGENDA.includes(result.action)) {
+      return { mensagem: 'No controle de finanças pessoais não há agenda nem clientes. Posso registrar gastos, receitas ou mostrar o resumo do mês.', pergunta: false };
+    }
     const hoje = dataLocal();
     const dataValida = (d: unknown) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
     const horaValida = (h: unknown) => typeof h === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(h);
