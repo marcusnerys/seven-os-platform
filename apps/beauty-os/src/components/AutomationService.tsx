@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { dataLocal, ehAniversarioHoje } from '../lib/utils';
@@ -13,9 +13,14 @@ export function AutomationService() {
   const vertical = getVertical(settings.businessType);
   const [pendingBirthdays, setPendingBirthdays] = useState<any[]>([]);
   const [showPrompt, setShowPrompt] = useState(false);
+  // Quem já recebeu os parabéns nesta sessão. Voltar do WhatsApp recarrega os
+  // dados e reexecutava a verificação: a fila voltava para a primeira pessoa,
+  // que recebia de novo, e as seguintes nunca eram chamadas.
+  const enviados = useRef(new Set<string>());
 
   useEffect(() => {
-    if (!user || clients.length === 0 || automationTemplates.length === 0) return;
+    // Com o aviso aberto, a fila é dele: recalcular aqui a reiniciava.
+    if (!user || showPrompt || clients.length === 0 || automationTemplates.length === 0) return;
 
     const checkBirthdays = () => {
       const now = new Date();
@@ -36,7 +41,7 @@ export function AutomationService() {
       // link do WhatsApp sem destinatário.
       const birthdays = clients.filter(c => {
         if (String(c.phone ?? '').replace(/\D/g, '').length < 10) return false;
-        return ehAniversarioHoje(c.birthDate, todayStr);
+        return ehAniversarioHoje(c.birthDate, todayStr) && !enviados.current.has(c.id);
       });
 
       if (birthdays.length > 0) {
@@ -51,7 +56,7 @@ export function AutomationService() {
     // Check periodically (every 15 minutes)
     const interval = setInterval(checkBirthdays, 15 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [user, clients, automationTemplates, automationLogs]);
+  }, [user, clients, automationTemplates, automationLogs, showPrompt]);
 
   const handleSendAll = async () => {
     const template = automationTemplates.find(t => t.type === 'birthday' && t.isActive);
@@ -67,6 +72,7 @@ export function AutomationService() {
         empresa: settings.studioName || 'Meu Negócio'
       });
       openWhatsApp(client.phone, message);
+      enviados.current.add(client.id);
     });
 
     if (pendingBirthdays.length > 1) {
@@ -74,18 +80,21 @@ export function AutomationService() {
       return; // Keep prompt open for next one
     }
 
-    const now = new Date();
-    const todayStr = dataLocal(now);
-    await addAutomationLog(`birthday_${todayStr}`);
-    setShowPrompt(false);
+    await encerrarDoDia();
   };
 
-  const handleDismiss = async () => {
-    const now = new Date();
-    const todayStr = dataLocal(now);
-    await addAutomationLog(`birthday_${todayStr}`);
+  // Fecha primeiro e grava depois. Sem conexão, a gravação falhava antes do
+  // setShowPrompt(false) e o aviso não fechava por nada, sem explicar.
+  const encerrarDoDia = async () => {
     setShowPrompt(false);
+    try {
+      await addAutomationLog(`birthday_${dataLocal()}`);
+    } catch {
+      useStore.getState().setToast({ message: 'Sem conexão: o aviso de aniversário pode voltar mais tarde.', type: 'error' });
+    }
   };
+
+  const handleDismiss = encerrarDoDia;
 
   return (
     <AnimatePresence>
@@ -125,7 +134,7 @@ export function AutomationService() {
                   </div>
                 ))}
                 {pendingBirthdays.length > 2 && (
-                  <p className="text-[11px] text-ios-gold font-medium px-2 italic">+ {pendingBirthdays.length - 2} outras clientes</p>
+                  <p className="text-[11px] text-ios-gold font-medium px-2 italic">+ {pendingBirthdays.length - 2} {vertical.clientGender === 'f' ? 'outras' : 'outros'} {vertical.clientNounPlural.toLowerCase()}</p>
                 )}
               </div>
 

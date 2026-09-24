@@ -6,7 +6,7 @@ import { TrendingUp, Users, DollarSign, Calendar, ChevronRight, UserPlus, PlusCi
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 import { cn, dataLocal, ehAniversarioHoje } from '../lib/utils';
-import { useStore } from '../lib/store';
+import { useStore, TAMANHO_MAXIMO_FOTO, ERRO_FORMATO_FOTO } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { useWeather } from '../hooks/useWeather';
 
@@ -59,8 +59,8 @@ export default function Dashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setLocalToast({ message: 'A imagem deve ter menos de 5MB', type: 'error' });
+    if (file.size > TAMANHO_MAXIMO_FOTO) {
+      setLocalToast({ message: 'A imagem deve ter menos de 20 MB.', type: 'error' });
       return;
     }
 
@@ -69,8 +69,9 @@ export default function Dashboard() {
     try {
       await updateUserAvatar(file);
       setLocalToast({ message: 'Foto atualizada', type: 'success' });
-    } catch {
-      setLocalToast({ message: 'Não foi possível salvar a foto. Tente novamente.', type: 'error' });
+    } catch (erro) {
+      const formato = erro instanceof Error && erro.message === ERRO_FORMATO_FOTO;
+      setLocalToast({ message: formato ? ERRO_FORMATO_FOTO : 'Não foi possível salvar a foto. Tente novamente.', type: 'error' });
     }
   };
 

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, X, Sparkles, Command } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/store';
+import { getVertical } from '../lib/vertical';
 import { useVoiceAssistant, VoiceCommandResult } from '../services/voiceService';
 
 export function VoiceAssistant() {
@@ -32,6 +33,33 @@ export function VoiceAssistant() {
   const ativoRef = React.useRef(isVoiceActive);
   ativoRef.current = isVoiceActive;
   const { parseCommand, executeCommand, getRoutineInsight } = useVoiceAssistant();
+
+  // Dicas conforme o tipo de negócio. Eram fixas e de salão: em Finanças
+  // Pessoais oito das doze falavam de agenda e clientes, que não existem ali;
+  // numa oficina sugeriam "Criar serviço Extensão de Cílios".
+  const vertical = getVertical(useStore(state => state.settings).businessType);
+  const clienteTxt = vertical.clientNoun.toLowerCase();
+  const dicasDeVoz = vertical.hasScheduling
+    ? [
+        'Agendar Ana amanhã 14h',
+        'Registrar venda de 200 reais',
+        'Adicionar despesa de 50 reais',
+        'Ver agenda de hoje',
+        `Cadastrar ${vertical.clientGender === 'f' ? 'nova' : 'novo'} ${clienteTxt}`,
+        'Cancelar agendamento da Maria',
+        'Resumo financeiro do mês',
+        `Quem está há 30 dias sem vir`,
+        'Mandar WhatsApp para Ana',
+        'Promover Joana para VIP',
+        `Criar ${vertical.serviceNoun.toLowerCase()} de 80 reais`,
+        'Ver dashboard',
+      ]
+    : [
+        'Adicionar despesa de 50 reais no mercado',
+        'Registrar receita de 200 reais',
+        'Resumo financeiro do mês',
+        'Ver dashboard',
+      ];
 
   const addDebugLog = (label: string, value: any) => {
     setDebugLogs(prev => [...prev.slice(-4), { label, value }]);
@@ -358,20 +386,7 @@ export function VoiceAssistant() {
                 <div className="mt-4 flex flex-col gap-3">
                   <p className="text-[11px] font-bold text-ios-text-secondary uppercase tracking-[1.5px] opacity-40">Tente dizer:</p>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {[
-                      "Agendar Ana amanhã 14h",
-                      "Registrar venda de 200 reais",
-                      "Adicionar despesa de 50 reais",
-                      "Ver agenda de hoje",
-                      "Cadastrar nova cliente",
-                      "Cancelar agendamento da Maria",
-                      "Resumo financeiro do mês",
-                      "Clientes inativas",
-                      "Mandar WhatsApp para Ana",
-                      "Promover Joana para VIP",
-                      "Criar serviço Extensão de Cílios",
-                      "Ver dashboard",
-                    ].map((tip, i) => (
+                    {dicasDeVoz.map((tip, i) => (
                       <span key={i} className="px-3 py-1.5 rounded-full bg-white/5 text-[11px] font-medium text-white/60 border border-white/5">
                         "{tip}"
                       </span>

@@ -279,7 +279,9 @@ export default function Clients() {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleFavorite(client.id);
+                        toggleFavorite(client.id).catch(() => {
+                          setToast({ message: 'Não foi possível favoritar. Verifique a conexão.', type: 'error' });
+                        });
                       }}
                       className="p-1 -m-1 group/heart active:scale-125 transition-transform shrink-0"
                     >
@@ -323,7 +325,7 @@ export default function Clients() {
                   </div>
                   <div className="opacity-40">
                     <p className="text-[14px] font-bold text-white mb-1">{nenhum} {cliente} ainda</p>
-                    <p className="text-[11px] text-white/50 leading-relaxed">Toque no <span className="text-ios-gold">+</span> para cadastrar<br />seu{fem ? '' : ''} {primeiro} {cliente}</p>
+                    <p className="text-[11px] text-white/50 leading-relaxed">Toque no <span className="text-ios-gold">+</span> para cadastrar<br />{fem ? 'sua' : 'seu'} {primeiro} {cliente}</p>
                   </div>
                 </>
               ) : (
@@ -374,7 +376,9 @@ export default function Clients() {
                   <Button 
                     variant={favoritoAtual ? 'primary' : 'secondary'}
                     className="flex-1 h-14"
-                    onClick={() => toggleFavorite(selectedClient.id)}
+                    onClick={() => toggleFavorite(selectedClient.id).catch(() => {
+                      setToast({ message: 'Não foi possível favoritar. Verifique a conexão.', type: 'error' });
+                    })}
                   >
                     <Heart size={20} fill={favoritoAtual ? "currentColor" : "none"} />
                     {favoritoAtual ? (fem ? 'Favorita' : 'Favorito') : 'Favoritar'}
@@ -613,7 +617,7 @@ export default function Clients() {
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Tags (Separadas por vírgula)</label>
                 <Input 
                   voice
-                  placeholder="Ex: Noiva, Micro, Unhas"
+                  placeholder="Ex: Frequente, Indicação"
                   value={newClient.tags}
                   onChange={e => setNewClient({ ...newClient, tags: e.target.value })}
                 />

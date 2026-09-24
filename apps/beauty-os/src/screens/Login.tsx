@@ -119,7 +119,7 @@ export default function Login() {
           <Logo size="lg" />
           <div className="text-center">
             <h1 className="text-[28px] font-bold text-ios-text-primary tracking-tightest leading-tight">LESHANOT</h1>
-            <p className="text-ios-gold font-bold tracking-[4px] text-[10px] uppercase mt-1">Studio OS</p>
+            <p className="text-ios-gold font-bold tracking-[4px] text-[10px] uppercase mt-1">OS</p>
           </div>
         </div>
 

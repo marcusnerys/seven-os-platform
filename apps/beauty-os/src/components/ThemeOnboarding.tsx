@@ -86,18 +86,19 @@ export function Onboarding() {
     try {
       setTheme(selectedAccent, selectedBg);
       await updateSettings({ studioName: businessName.trim(), businessType });
+      setHasChosenTheme(true);
+      setHasOnboarded(true);
     } catch (error) {
-      // Uma falha de gravação não pode prender o usuário na última tela do
-      // onboarding. As escolhas já ficaram aplicadas localmente, então o app
-      // abre normalmente e avisamos que a sincronização não foi.
-      console.error('Onboarding: falha ao sincronizar configurações', error);
+      // Concluir mesmo com a falha parecia gentil, mas a próxima leitura do
+      // banco trazia de volta "Meu Negócio" e o tipo genérico, e o onboarding
+      // não reaparecia: uma oficina virava negócio genérico sem aviso e sem
+      // caminho óbvio para corrigir. Fica na tela para tentar de novo.
+      console.error('Onboarding: falha ao salvar configurações', error);
       setToast({
-        message: 'Não deu para salvar no servidor. Suas escolhas valem neste aparelho — revise em Mais → Configurações.',
+        message: 'Sem conexão para salvar. Verifique a internet e toque em concluir de novo.',
         type: 'error',
       });
     } finally {
-      setHasChosenTheme(true);
-      setHasOnboarded(true);
       setSaving(false);
     }
   };
@@ -112,7 +113,9 @@ export function Onboarding() {
       {/* Cabeçalho */}
       <div className="text-center w-full max-w-sm">
         <h1 className="text-[28px] font-black tracking-tight leading-tight" style={{ color: textPrimary }}>
-          {stepIndex === 0 ? 'Vamos configurar' : STEP_TITLES[step]}
+          {stepIndex === 0
+            ? 'Vamos configurar'
+            : step === 'name' && !vertical.hasScheduling ? 'Como você se chama?' : STEP_TITLES[step]}
         </h1>
         <p className="text-[13px] mt-2" style={{ color: textSecondary }}>
           {stepIndex === 0 ? STEP_TITLES.type : `Passo ${stepIndex + 1} de ${STEPS.length}`}
@@ -190,7 +193,7 @@ export function Onboarding() {
                 }}
               />
               <p className="text-[11px] px-1" style={{ color: textSecondary }}>
-                Aparece no app e no seu link público de agendamento.
+                {vertical.hasScheduling ? 'Aparece no app e no seu link público de agendamento.' : 'Aparece no app.'}
               </p>
             </motion.div>
           )}

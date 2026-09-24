@@ -38,14 +38,14 @@ const WMO_MAP: Record<number, { label: string; emoji: string }> = {
 };
 
 function getBeautyTip(code: number, temp: number): string {
-  if (code >= 95) return 'Trovoada — confirme os agendamentos com antecedência';
-  if (code >= 61 && code < 82) return 'Dia de chuva — clientes podem atrasar, tenha flexibilidade';
-  if (code >= 51 && code < 61) return 'Garoa hoje — lembre suas clientes de trazer guarda-chuva';
+  if (code >= 95) return 'Trovoada — evite deslocamentos se puder';
+  if (code >= 61 && code < 82) return 'Dia de chuva — pode haver atrasos, tenha flexibilidade';
+  if (code >= 51 && code < 61) return 'Garoa hoje — leve guarda-chuva';
   if (code >= 45 && code < 51) return 'Neblina pela manhã — visibilidade reduzida nas estradas';
   if (temp >= 32) return 'Calor intenso — reforce a hidratação e o ar-condicionado';
-  if (temp >= 26) return 'Dia quente — ótimo para atendimentos de beleza ✨';
-  if (temp <= 16) return 'Dia frio — clientes adoram atendimentos aconchegantes';
-  return 'Dia agradável para atender com tranquilidade ✨';
+  if (temp >= 26) return 'Dia quente — beba bastante água ✨';
+  if (temp <= 16) return 'Dia frio — agasalhe-se bem';
+  return 'Dia agradável ✨';
 }
 
 export function useWeather() {

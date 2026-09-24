@@ -73,7 +73,7 @@ export default function App() {
   
   if (isPublicRoute) {
     return (
-      <div className="min-h-screen w-full bg-[#050505] text-white">
+      <div className="min-h-screen w-full bg-[#050505] text-white pt-[env(safe-area-inset-top)]">
         <BookingPage />
       </div>
     );
@@ -86,7 +86,7 @@ export default function App() {
   }
 
   return (
-    <div className="relative h-screen w-full bg-ios-bg selection:bg-ios-gold/30 overflow-hidden flex flex-col">
+    <div className="relative h-screen w-full bg-ios-bg selection:bg-ios-gold/30 overflow-hidden flex flex-col pt-[env(safe-area-inset-top)]">
         {/* Screen Content */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           <main className="flex-1 overflow-hidden relative">
