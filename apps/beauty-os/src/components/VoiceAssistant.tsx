@@ -18,6 +18,19 @@ export function VoiceAssistant() {
   const [routineInsight, setRoutineInsight] = useState<string | null>(null);
   const [isLoadingInsight, setIsLoadingInsight] = useState(false);
   const recognitionRef = React.useRef<any>(null);
+  // Cada comando ganha um número. Fechar o assistente avança o contador, e
+  // tudo que chega de um comando antigo é descartado. Um booleano de
+  // "cancelado" não bastava: reabrir o assistente o zerava, e a resposta do
+  // comando fechado ainda era gravada — além de fechar a sessão nova.
+  const geracaoRef = React.useRef(0);
+  // Depois de um resultado ou erro final, o microfone não religa sozinho: a
+  // religação apagava a mensagem em menos de um segundo, antes de dar para
+  // ler "Assistente ocupado" ou "Sessão expirada".
+  const [pausado, setPausado] = useState(false);
+  // A rotina que chega depois de fechar não pode ficar guardada para a
+  // próxima abertura, onde apareceria com dados velhos.
+  const ativoRef = React.useRef(isVoiceActive);
+  ativoRef.current = isVoiceActive;
   const { parseCommand, executeCommand, getRoutineInsight } = useVoiceAssistant();
 
   const addDebugLog = (label: string, value: any) => {
@@ -25,16 +38,17 @@ export function VoiceAssistant() {
   };
 
   useEffect(() => {
-    if (isVoiceActive && !isListening && !isProcessing) {
+    if (!isVoiceActive) setPausado(false);
+    if (isVoiceActive && !isListening && !isProcessing && !pausado) {
       startListening();
     }
-  }, [isVoiceActive, isProcessing]);
+  }, [isVoiceActive, isProcessing, pausado]);
 
   useEffect(() => {
     if (isVoiceActive && !routineInsight && !isLoadingInsight) {
       setIsLoadingInsight(true);
       getRoutineInsight().then(insight => {
-        setRoutineInsight(insight);
+        if (ativoRef.current) setRoutineInsight(insight);
         setIsLoadingInsight(false);
       });
     }
@@ -46,9 +60,13 @@ export function VoiceAssistant() {
   const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
+      // Fechava sem dizer nada. No Firefox e em alguns navegadores de
+      // celular a pessoa tocava no microfone e a tela simplesmente sumia.
+      useStore.getState().setToast({ message: 'Este navegador não reconhece voz. Use o Chrome para falar com o assistente.', type: 'error' });
       setIsVoiceActive(false);
       return;
     }
+    setPausado(false);
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
@@ -60,7 +78,30 @@ export function VoiceAssistant() {
       setIsListening(true);
       setTranscript('');
       setInterim('');
-      setResult(null);
+      // A pergunta de complemento ("Faltou o horário...") precisa continuar
+      // na tela enquanto a pessoa responde. Antes ela era apagada no mesmo
+      // instante em que o microfone religava, e a pessoa não sabia o que dizer.
+      setResult(prev => (prev?.status === 'incomplete' ? prev : null));
+    };
+
+    // Microfone negado, silêncio ou rede: sem este tratamento a tela ficava
+    // parada em "Aguarde..." sem explicar nada e sem forma de tentar de novo.
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      const recados: Record<string, string> = {
+        'not-allowed': 'Permita o uso do microfone nas configurações do navegador.',
+        'service-not-allowed': 'Permita o uso do microfone nas configurações do navegador.',
+        'no-speech': 'Não ouvi nada. Toque no microfone para falar de novo.',
+        'audio-capture': 'Nenhum microfone encontrado neste aparelho.',
+        'network': 'Sem conexão para reconhecer a voz. Verifique a internet.',
+      };
+      if (event?.error === 'aborted') return;
+      setPausado(true);
+      setResult({
+        action: 'unknown',
+        message: recados[event?.error] ?? 'Não consegui ouvir. Toque no microfone para tentar de novo.',
+        status: 'complete',
+      });
     };
 
     recognition.onresult = (event: any) => {
@@ -84,64 +125,96 @@ export function VoiceAssistant() {
 
     recognition.onend = () => {
       setIsListening(false);
-      // Only close assistant if not processing or incomplete
     };
 
     recognition.start();
   };
 
+  /** Mostra o resultado por alguns segundos e fecha — se ainda for o mesmo comando. */
+  const fecharDepois = (geracao: number) => {
+    setIsProcessing(false);
+    setPausado(true);
+    setTimeout(() => {
+      if (geracao !== geracaoRef.current) return;
+      setIsVoiceActive(false);
+      setResult(null);
+      setDebugLogs([]);
+    }, 3500);
+  };
+
   const handleFinalTranscript = async (text: string) => {
+    const geracao = ++geracaoRef.current;
     setIsProcessing(true);
     const combinedText = lastCommand ? `${lastCommand} ${text}` : text;
-    setDebugLogs([]); // Clear for new command
+    setDebugLogs([]);
     addDebugLog('Input', combinedText);
-    
+
     try {
       const res = await parseCommand(combinedText);
+      if (geracao !== geracaoRef.current) return;
       setResult(res);
       addDebugLog('Intent', res.action);
       addDebugLog('Entities', res.data);
       addDebugLog('Status', res.status);
-      
-      if (res.status === 'complete' && res.action !== 'unknown') {
-        // Execute immediately
-        addDebugLog('Backend', 'Iniciando execução...');
-        await executeCommand(res);
-        addDebugLog('Firebase', 'Dados sincronizados');
-        setLastCommand('');
-        
-        // Brief pause to show success message
-        setTimeout(() => {
-          setIsProcessing(false);
-          setIsVoiceActive(false);
-          setResult(null);
-          setDebugLogs([]);
-        }, 3000);
-      } else if (res.status === 'incomplete') {
-        // Ask follow up
+
+      if (res.status === 'incomplete') {
         setLastCommand(combinedText);
         setIsProcessing(false);
         addDebugLog('Workflow', 'Aguardando complemento');
-        // Recognition will automatically restart due to useEffect
-      } else {
-        // Unknown or error
-        setIsProcessing(false);
+        return;
+      }
+
+      if (res.action === 'unknown') {
         setLastCommand('');
         addDebugLog('Error', 'Comando não reconhecido');
-        setTimeout(() => {
-          setIsVoiceActive(false);
-          setResult(null);
-          setDebugLogs([]);
-        }, 3000);
+        fecharDepois(geracao);
+        return;
       }
+
+      addDebugLog('Backend', 'Iniciando execução...');
+      let resultado: Awaited<ReturnType<typeof executeCommand>> = null;
+      try {
+        // A frase do Gemini é o que ele entendeu; o que de fato aconteceu
+        // vem daqui. Cliente não encontrado, horário ocupado, nome
+        // ambíguo — antes a tela confirmava mesmo assim.
+        resultado = await executeCommand(res);
+      } catch {
+        if (geracao !== geracaoRef.current) return;
+        // A gravação falhou depois de a tela já ter dito que deu certo.
+        // Antes o assistente só fechava, e a pessoa acreditava no "feito".
+        setResult({ ...res, action: 'unknown', message: 'Não consegui salvar. Verifique a conexão e tente de novo.' });
+        setLastCommand('');
+        fecharDepois(geracao);
+        return;
+      }
+      if (geracao !== geracaoRef.current) return;
+
+      // Pergunta ("qual Ana?", "qual horário?") mantém a conversa aberta:
+      // o microfone religa e a resposta é somada ao comando original. Antes
+      // a pergunta aparecia e o assistente fechava em 3 segundos, sem dar
+      // como responder.
+      if (resultado?.pergunta) {
+        setResult({ ...res, message: resultado.mensagem, status: 'incomplete' });
+        setLastCommand(combinedText);
+        setIsProcessing(false);
+        return;
+      }
+
+      if (resultado) setResult({ ...res, message: resultado.mensagem });
+      addDebugLog('Firebase', 'Dados sincronizados');
+      setLastCommand('');
+      fecharDepois(geracao);
     } catch (error) {
+      if (geracao !== geracaoRef.current) return;
       addDebugLog('Fatal', error instanceof Error ? error.message : 'Erro desconhecido');
-      setIsProcessing(false);
-      setIsVoiceActive(false);
+      setResult({ action: 'unknown', message: 'Algo deu errado. Tente de novo.', status: 'complete' });
+      setLastCommand('');
+      fecharDepois(geracao);
     }
   };
 
   const stopAssistant = () => {
+    geracaoRef.current++;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
@@ -184,8 +257,13 @@ export function VoiceAssistant() {
                   : (isListening ? ["0 0 20px rgba(230,192,139,0.3)", "0 0 60px rgba(230,192,139,0.5)", "0 0 20px rgba(230,192,139,0.3)"] : "0 0 20px rgba(230,192,139,0.3)")
               }}
               transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              // Depois de um silêncio ou erro não havia como tentar de novo
+              // sem fechar e reabrir o assistente.
+              onClick={() => { if (!isListening && !isProcessing) startListening(); }}
+              role="button"
+              aria-label="Falar de novo"
               className={cn(
-                "w-24 h-24 rounded-full flex items-center justify-center text-ios-bg mb-12 z-10 transition-colors duration-500",
+                "w-24 h-24 rounded-full flex items-center justify-center text-ios-bg mb-12 z-10 transition-colors duration-500 cursor-pointer",
                 isProcessing ? "bg-ios-cyan" : "bg-ios-gold"
               )}
             >
@@ -214,7 +292,7 @@ export function VoiceAssistant() {
 
             <div className="flex flex-col gap-6 max-w-sm w-full">
               <h2 className="text-[24px] font-bold text-white tracking-tight leading-tight">
-                {isProcessing ? 'Processando...' : (isListening ? 'Como posso ajudar?' : 'Aguarde...')}
+                {isProcessing ? 'Processando...' : (isListening ? 'Como posso ajudar?' : 'Toque no microfone para falar')}
               </h2>
 
               <div className="min-h-[100px] p-6 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-md flex flex-col items-center justify-center gap-3">

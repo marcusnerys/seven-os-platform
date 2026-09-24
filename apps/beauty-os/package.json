@@ -11,7 +11,8 @@
     "check:ocr": "esbuild src/lib/ocr.ts --bundle --format=esm --outfile=node_modules/.tmp/ocr.mjs --log-level=error && node scripts/check-ocr.mjs",
     "check:ics": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-ics.mjs",
     "check:slots": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-slots.mjs",
-    "check": "npm run check:ocr && npm run check:ics && npm run check:slots"
+    "check": "npm run check:ocr && npm run check:ics && npm run check:slots && npm run check:helpers",
+    "check:helpers": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-helpers.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

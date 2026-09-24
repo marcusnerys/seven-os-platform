@@ -1,4 +1,4 @@
-import { parseStatementText } from '../node_modules/.tmp/ocr.mjs';
+import { parseStatementText, sanitizarTransacoes } from "../node_modules/.tmp/ocr.mjs";
 import assert from 'node:assert';
 
 const TODAY = '2026-09-01';
@@ -111,6 +111,94 @@ for (const linha of [...dataImpossivel, '31/12/2026 X 10,00', '29/02/2024 Y 10,0
   assert.ok(tx, 'nao extraiu 27.08.2026');
   assert.strictEqual(tx.date, '2026-08-27');
   assert.strictEqual(tx.amount, 100);
+}
+
+
+// Linhas de saldo e total não são lançamentos. Todo extrato tem "SALDO
+// ANTERIOR" e "SALDO DO DIA" com valor; sem esta regra elas entravam como
+// despesas já marcadas para importar, inflando o gasto do mês.
+for (const linha of ['SALDO ANTERIOR  1.234,56', 'SALDO DO DIA R$ 980,00', 'TOTAL DE DEBITOS 450,00', 'Subtotal 120,00', 'LIMITE DISPONIVEL 2.000,00']) {
+  assert.strictEqual(parseStatementText(linha, TODAY).length, 0, `nao deveria importar: ${linha}`);
+}
+
+// Hífen com espaço é separador, não sinal. "Venda - R$ 50,00" é receita.
+// Colado no valor continua sendo sinal: "-2.000,00" é saída.
+{
+  const [venda] = parseStatementText('Venda de produto - R$ 50,00', TODAY);
+  assert.ok(venda, 'venda descartada');
+  assert.strictEqual(venda.type, 'revenue', 'hifen separador virou despesa');
+  assert.strictEqual(venda.amount, 50);
+
+  const [saida] = parseStatementText('TRANSFERENCIA ENVIADA -2.000,00', TODAY);
+  assert.strictEqual(saida.type, 'expense');
+  assert.strictEqual(saida.amount, 2000);
+}
+
+// O padrão de valor aceitava um "R" solto antes dos dígitos e comia a última
+// letra da descrição: "FORNECEDOR 50,00" virava "FORNECEDO".
+{
+  const [tx] = parseStatementText('PAGAMENTO FORNECEDOR 50,00', TODAY);
+  assert.strictEqual(tx.description, 'PAGAMENTO FORNECEDOR');
+  const [tx2] = parseStatementText('COMPRA MATERIAL R$ 30,00', TODAY);
+  assert.strictEqual(tx2.description, 'COMPRA MATERIAL');
+  assert.strictEqual(tx2.amount, 30);
+}
+
+// Data sem ano que cairia no futuro é do ano anterior: extrato de dezembro
+// lido em janeiro não pode virar lançamento de dezembro do ano seguinte.
+{
+  const [tx] = parseStatementText('28/12  PIX RECEBIDO ANA  R$ 100,00', '2027-01-10');
+  assert.strictEqual(tx.date, '2026-12-28');
+  const [tx2] = parseStatementText('05/01  PIX RECEBIDO ANA  R$ 100,00', '2027-01-10');
+  assert.strictEqual(tx2.date, '2027-01-05');
+}
+
+// Saída da IA: nada entra no banco sem passar por aqui. Valor em texto,
+// negativo, tipo desconhecido, data inválida ou ausente.
+{
+  const bruto = [
+    { date: '2026-09-18', description: 'PIX', amount: '250,00', type: 'revenue', category: 'Receita' },
+    { date: '2026-09-19', description: 'Aluguel', amount: -1500, type: 'expense', category: 'Aluguel' },
+    { date: '31/02/2026', description: 'Luz', amount: 89.9, type: 'saida', category: 'Moradia' },
+    { description: 'Sem valor', amount: 'abc', type: 'expense' },
+    { date: '2026-09-20', description: '', amount: 10, type: 'revenue' },
+    null,
+    { date: '2026-09-21', description: 'Venda', amount: '1.234,56', type: 'entrada' },
+  ];
+  const limpo = sanitizarTransacoes(bruto, TODAY);
+  assert.strictEqual(limpo.length, 4, `esperado 4, veio ${limpo.length}: ${JSON.stringify(limpo)}`);
+  assert.strictEqual(limpo[0].amount, 250);
+  assert.strictEqual(limpo[1].amount, 1500);
+  assert.strictEqual(limpo[1].type, 'expense');
+  assert.strictEqual(limpo[2].date, TODAY, 'data invalida cai em hoje');
+  assert.strictEqual(limpo[2].type, 'expense', 'saida = expense');
+  assert.strictEqual(limpo[3].amount, 1234.56);
+  assert.strictEqual(limpo[3].type, 'revenue', 'entrada = revenue');
+  assert.deepStrictEqual(sanitizarTransacoes('nao e lista', TODAY), []);
+}
+
+// Saldo e total só quando abrem a linha. No meio da descrição são
+// lançamentos reais: transferência da conta-salário, posto Total, juros do
+// cheque especial.
+for (const [linha, valor] of [['TRANSF SALDO C/SAL P/CC 2.500,00', 2500], ['POSTO TOTAL 150,00', 150], ['JUROS LIMITE DA CONTA 38,20', 38.2]]) {
+  const [tx] = parseStatementText(linha, TODAY);
+  assert.ok(tx, `lancamento real descartado: ${linha}`);
+  assert.strictEqual(tx.amount, valor);
+}
+
+// Lançamento agendado para daqui a poucos dias fica no ano corrente; só volta
+// um ano quando a data cairia meses à frente (dezembro lido em janeiro).
+{
+  const [agendado] = parseStatementText('25/09  PIX AGENDADO  R$ 200,00', '2026-09-23');
+  assert.strictEqual(agendado.date, '2026-09-25');
+}
+
+// Inteiro com R$ e sinal depois do símbolo, sem lookbehind (iOS antigo não
+// suporta e a leitura inteira quebrava).
+{
+  const [tx] = parseStatementText('ESTORNO TARIFA R$ -15', TODAY);
+  assert.strictEqual(tx.amount, 15);
+  assert.strictEqual(tx.type, 'expense');
 }
 
 console.log('\nOK — parser passou em todos os asserts');

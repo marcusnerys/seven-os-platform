@@ -5,7 +5,7 @@ import { Logo } from '../components/Logo';
 import { TrendingUp, Users, DollarSign, Calendar, ChevronRight, UserPlus, PlusCircle, Gift, MessageCircle, Bell, Lightbulb, Sparkles, Camera, RotateCw, Wind, Droplets } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
-import { cn, dataLocal } from '../lib/utils';
+import { cn, dataLocal, ehAniversarioHoje } from '../lib/utils';
 import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { useWeather } from '../hooks/useWeather';
@@ -64,21 +64,14 @@ export default function Dashboard() {
       return;
     }
 
-    const reader = new FileReader();
     // Aqui não havia aviso nenhum, nem de sucesso nem de falha: trocar a foto
     // e não ver nada acontecer era indistinguível de um erro de gravação.
-    reader.onloadend = async () => {
-      try {
-        await updateUserAvatar(reader.result as string);
-        setLocalToast({ message: 'Foto atualizada', type: 'success' });
-      } catch {
-        setLocalToast({ message: 'Não foi possível salvar a foto. Tente novamente.', type: 'error' });
-      }
-    };
-    reader.onerror = () => {
-      setLocalToast({ message: 'Não foi possível ler o arquivo escolhido.', type: 'error' });
-    };
-    reader.readAsDataURL(file);
+    try {
+      await updateUserAvatar(file);
+      setLocalToast({ message: 'Foto atualizada', type: 'success' });
+    } catch {
+      setLocalToast({ message: 'Não foi possível salvar a foto. Tente novamente.', type: 'error' });
+    }
   };
 
   const getBibleVerse = () => {
@@ -117,23 +110,28 @@ export default function Dashboard() {
   const today = dataLocal(now);
   const currentMonthDay = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   
-  const todayAppointments = appointments.filter(a => a.date === today);
+  // Cancelados não contam como atendimento do dia. Com o botão Cancelar
+  // agora marcando o status em vez de apagar, eles apareceriam no KPI.
+  const todayAppointments = appointments.filter(a => a.date === today && a.status !== 'Cancelado');
   const totalRevenue = transactions.filter(t => t.type === 'revenue').reduce((acc, curr) => acc + curr.amount, 0);
 
-  const birthdaysToday = clients.filter(c => {
-    if (!c.birthDate) return false;
-    // birthDate is YYYY-MM-DD
-    return c.birthDate.substring(5) === currentMonthDay;
-  });
+  const birthdaysToday = clients.filter(c => ehAniversarioHoje(c.birthDate, today));
 
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
   const tomorrowStr = dataLocal(tomorrow);
-  const tomorrowAppointments = appointments.filter(a => a.date === tomorrowStr);
+  // Só quem ainda vem: o lembrete ia também para quem tinha cancelado.
+  const tomorrowAppointments = appointments.filter(a =>
+    a.date === tomorrowStr && (a.status === 'Confirmado' || a.status === 'Pendente')
+  );
+  const [proximoLembrete, setProximoLembrete] = useState(0);
 
   const handleSendBirthday = (client: any) => {
     const template = automationTemplates.find(t => t.type === 'birthday' && t.isActive);
-    if (!template) return;
+    if (!template) {
+      setLocalToast({ message: 'Ative a mensagem de aniversário em Automação para enviar os parabéns.', type: 'error' });
+      return;
+    }
 
     const message = resolveMessage(template.message, {
       nome: client.name,
@@ -145,15 +143,23 @@ export default function Dashboard() {
     }
   };
 
+  // Um lembrete por toque, avançando na lista. O botão abria sempre o
+  // WhatsApp do primeiro agendamento de amanhã: com cinco agendamentos, os
+  // outros quatro nunca eram lembrados — e o card dizia "Lembrar Clientes".
+  // Abrir várias conversas de uma vez o navegador bloqueia.
   const handleBulkReminders = () => {
     const template = automationTemplates.find(t => t.type === 'reminder' && t.isActive);
-    if (!template || tomorrowAppointments.length === 0) return;
+    if (!template) {
+      setLocalToast({ message: 'Ative a mensagem de lembrete em Automação para enviar.', type: 'error' });
+      return;
+    }
+    if (tomorrowAppointments.length === 0) return;
 
-    // Send the first one as a demonstration (bulk opening tabs is often blocked by browsers)
-    const appt = tomorrowAppointments[0];
+    const indice = proximoLembrete % tomorrowAppointments.length;
+    const appt = tomorrowAppointments[indice];
+    setProximoLembrete(indice + 1);
     const client = clients.find(c => c.id === appt.clientId);
-    const phone = client?.phone || appt.clientPhone;
-    if (!phone) return;
+    const phone = client?.phone || appt.clientPhone || '';
 
     const message = resolveMessage(template.message, {
       nome: client?.name || appt.clientName,
@@ -164,7 +170,7 @@ export default function Dashboard() {
     });
 
     if (!openWhatsApp(phone, message)) {
-      setLocalToast({ message: 'O primeiro agendamento de amanhã não tem telefone cadastrado.', type: 'error' });
+      setLocalToast({ message: `${client?.name || appt.clientName || 'Esse agendamento'} não tem telefone válido. Toque de novo para o próximo.`, type: 'error' });
     }
   };
 
@@ -366,7 +372,9 @@ export default function Dashboard() {
                    className="h-9 px-4 text-[11px] font-bold bg-ios-cyan text-ios-bg border-none shadow-none"
                 >
                    <MessageCircle size={14} />
-                   Lembrar Clientes
+                   {tomorrowAppointments.length > 1
+                     ? `Lembrar ${(proximoLembrete % tomorrowAppointments.length) + 1} de ${tomorrowAppointments.length}`
+                     : 'Lembrar'}
                 </Button>
              </div>
           </GlassCard>

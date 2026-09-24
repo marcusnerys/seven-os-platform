@@ -38,6 +38,7 @@ export default function App() {
   const themeAccent = useStore(state => state.themeAccent);
   const themeBg = useStore(state => state.themeBg);
   const hasOnboarded = useStore(state => state.hasOnboarded);
+  const configLoaded = useStore(state => state.configLoaded);
   const isRecoveringPassword = useStore(state => state.isRecoveringPassword);
   const settings = useStore(state => state.settings);
   const vertical = getVertical(settings.businessType);
@@ -132,7 +133,10 @@ export default function App() {
 
         {/* Theme onboarding — shown to authenticated users who haven't chosen a theme yet */}
         <AnimatePresence>
-          {user && !hasOnboarded && <Onboarding />}
+          {/* Espera a leitura das configurações: conta já configurada num
+              aparelho novo não pode ver o questionário, que começava em
+              "Outro negócio" e sobrescrevia o que estava salvo. */}
+          {user && configLoaded && !hasOnboarded && <Onboarding />}
         </AnimatePresence>
 
         <PWAInstallPrompt />

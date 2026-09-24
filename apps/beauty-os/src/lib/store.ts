@@ -108,8 +108,11 @@ function toSnakeCaseClient(updates: Partial<Client>) {
   if (updates.phone !== undefined) mapped.phone = updates.phone;
   if (updates.spent !== undefined) mapped.spent = updates.spent;
   if (updates.visits !== undefined) mapped.visits = updates.visits;
-  if (updates.lastVisit !== undefined) mapped.last_visit = updates.lastVisit;
-  if (updates.birthDate !== undefined) mapped.birth_date = updates.birthDate;
+  // birth_date e last_visit são colunas date. O formulário manda '' quando
+  // o campo fica em branco, e o Postgres recusa '' em date (22007): editar
+  // qualquer cliente sem aniversário falhava com "Erro ao salvar".
+  if (updates.lastVisit !== undefined) mapped.last_visit = updates.lastVisit || null;
+  if (updates.birthDate !== undefined) mapped.birth_date = updates.birthDate || null;
   if (updates.tags !== undefined) mapped.tags = updates.tags;
   if (updates.isVIP !== undefined) mapped.is_vip = updates.isVIP;
   if (updates.isFavorite !== undefined) mapped.is_favorite = updates.isFavorite;
@@ -189,6 +192,8 @@ interface AppStore {
   themeBg: 'dark' | 'light';
   hasChosenTheme: boolean;
   hasOnboarded: boolean;
+  /** True depois que a leitura de beautyos_settings terminou (com ou sem linha). */
+  configLoaded: boolean;
   setTheme: (accent: string, bg: 'dark' | 'light') => void;
   setHasChosenTheme: (v: boolean) => void;
   setHasOnboarded: (v: boolean) => void;
@@ -227,7 +232,7 @@ interface AppStore {
 
   updateAutomationTemplate: (id: string, updates: Partial<AutomationTemplate>) => Promise<void>;
   addAutomationLog: (logKey: string) => Promise<void>;
-  updateUserAvatar: (photoURL: string) => Promise<void>;
+  updateUserAvatar: (arquivo: File) => Promise<void>;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
 
   getRevenueData: () => { value: number }[];
@@ -240,10 +245,30 @@ interface AppStore {
   setShowDevTools: (show: boolean) => void;
 }
 
+/** Reduz a imagem para no máximo `lado` pixels e devolve um JPEG leve. */
+async function reduzirImagem(arquivo: File, lado: number): Promise<Blob> {
+  const bitmap = await createImageBitmap(arquivo);
+  const escala = Math.min(1, lado / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * escala);
+  canvas.height = Math.round(bitmap.height * escala);
+  const ctx = canvas.getContext('2d')!;
+  // JPEG não tem transparência: sem um fundo, as áreas transparentes de um
+  // logo em PNG — o formato mais comum para logo — saíam pretas.
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Não foi possível ler a imagem'))), 'image/jpeg', 0.85)
+  );
+}
+
 export const useStore = create<AppStore>()(
   persist(
     (set, get) => {
       let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+      const concluindo = new Set<string>();
 
       const stopListeners = () => {
         if (realtimeChannel) {
@@ -252,6 +277,12 @@ export const useStore = create<AppStore>()(
         }
       };
 
+      // O Supabase devolve no máximo 1000 linhas por consulta. Sem paginar,
+      // um negócio com um ano de lançamentos perdia o excedente sem aviso — e
+      // como as transações vêm em ordem crescente de data, as que sumiam eram
+      // justamente as mais recentes: o Financeiro congelava.
+      const PAGINA = 1000;
+
       const fetchAndSet = async <T,>(
         table: string,
         empresaId: string,
@@ -259,22 +290,39 @@ export const useStore = create<AppStore>()(
         mapRow: (row: any) => T,
         orderColumn?: string,
       ) => {
-        let q = supabase.from(table).select('*').eq('empresa_id', empresaId);
-        if (orderColumn) q = q.order(orderColumn, { ascending: true });
-        const { data, error } = await q;
-        if (error) { handleSupabaseError(error, OperationType.LIST, table); return; }
-        setter((data ?? []).map(mapRow));
+        const linhas: any[] = [];
+        for (let de = 0; ; de += PAGINA) {
+          let q = supabase.from(table).select('*').eq('empresa_id', empresaId);
+          if (orderColumn) q = q.order(orderColumn, { ascending: true });
+          q = q.order('id', { ascending: true }).range(de, de + PAGINA - 1);
+          const { data, error } = await q;
+          if (error) { handleSupabaseError(error, OperationType.LIST, table); return; }
+          linhas.push(...(data ?? []));
+          if (!data || data.length < PAGINA) break;
+        }
+        setter(linhas.map(mapRow));
       };
+
+      // A carga inicial não era esperada por ninguém: falhando, a rejeição
+      // sumia e a tela mostrava listas vazias como se não houvesse dados.
+      const carregar = (promessa: Promise<void>) =>
+        promessa.catch(() => {
+          set({ toast: { message: 'Não foi possível carregar tudo. Verifique a internet, feche e abra o app.', type: 'error' } });
+        });
 
       const startListeners = (empresaId: string) => {
         stopListeners();
 
-        fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => set({ clients: rows }), fromSnakeCaseClient);
-        fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => set({ appointments: rows }), fromSnakeCaseAppointment, 'time');
-        fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => set({ transactions: rows }), fromSnakeCaseTransaction, 'date');
-        fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => set({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service));
-        fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation);
-        fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em');
+        carregar(fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => set({ clients: rows }), fromSnakeCaseClient));
+        carregar(fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => set({ appointments: rows }), fromSnakeCaseAppointment, 'time'));
+        carregar(fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => set({ transactions: rows }), fromSnakeCaseTransaction, 'date'));
+        carregar(fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => set({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service)));
+        carregar(fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation));
+        carregar(fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em'));
+        // Os registros de automação nunca eram lidos. O aviso de aniversário
+        // conferia "já tratei hoje?" numa lista sempre vazia e voltava a cada
+        // 15 minutos, mesmo depois de Ignorar ou de mandar os parabéns.
+        carregar(fetchAndSet('beautyos_automation_logs', empresaId, (rows: string[]) => set({ automationLogs: rows }), (r) => r.id as string));
 
         supabase.from('beautyos_settings').select('*').eq('empresa_id', empresaId).maybeSingle().then(({ data, error }) => {
           // Sem olhar o `error`, qualquer falha de leitura (rede oscilando, token
@@ -287,10 +335,32 @@ export const useStore = create<AppStore>()(
             return;
           }
           if (data) {
-            set({ settings: { studioName: data.studio_name, location: data.location, currency: data.currency, businessType: (data.business_type ?? 'generic') as BusinessType } });
+            // O onboarding mora no localStorage do aparelho: num celular novo,
+            // ou depois de sair e entrar, reaparecia para conta já configurada
+            // começando em "Outro negócio", e quem só avançasse sobrescrevia
+            // nome e tipo de negócio. Tema e cor também voltavam ao padrão.
+            //
+            // "Tem linha em beautyos_settings" não serve de sinal: o gatilho de
+            // cadastro cria a linha junto com a conta. O sinal é onboarded_at,
+            // gravado quando o onboarding termina (migration 0015).
+            //
+            // Só na primeira leitura da sessão. O auth emite SIGNED_IN a cada
+            // volta do app ao primeiro plano, e isso fecharia no meio o
+            // "Refazer configuração inicial" de quem saiu para copiar algo.
+            const primeiraLeitura = !get().configLoaded;
+            set({
+              settings: { studioName: data.studio_name, location: data.location, currency: data.currency, businessType: (data.business_type ?? 'generic') as BusinessType },
+              ...(primeiraLeitura && data.onboarded_at ? {
+                hasOnboarded: true,
+                hasChosenTheme: true,
+                ...(data.theme_accent ? { themeAccent: data.theme_accent } : {}),
+                ...(data.theme_bg === 'light' || data.theme_bg === 'dark' ? { themeBg: data.theme_bg as 'light' | 'dark' } : {}),
+              } : {}),
+              configLoaded: true,
+            });
           } else {
             const defaults: Settings = { studioName: 'Meu Negócio', location: 'São Paulo, BR', currency: 'BRL', businessType: 'generic' };
-            set({ settings: defaults });
+            set({ settings: defaults, configLoaded: true });
           }
         });
 
@@ -337,6 +407,7 @@ export const useStore = create<AppStore>()(
             // questionário e fica no vertical genérico sem nunca escolher.
             hasOnboarded: false,
             hasChosenTheme: false,
+            configLoaded: false,
           });
         }
       });
@@ -369,6 +440,7 @@ export const useStore = create<AppStore>()(
         themeBg: 'dark',
         hasChosenTheme: false,
         hasOnboarded: false,
+        configLoaded: false,
         setTheme: (accent, bg) => {
           set({ themeAccent: accent, themeBg: bg });
           const { user } = get();
@@ -381,7 +453,20 @@ export const useStore = create<AppStore>()(
           }
         },
         setHasChosenTheme: (v) => set({ hasChosenTheme: v }),
-        setHasOnboarded: (v) => set({ hasOnboarded: v }),
+        setHasOnboarded: (v) => {
+          set({ hasOnboarded: v });
+          const { user } = get();
+          // Grava no banco que o onboarding terminou, para outro aparelho
+          // saber que esta conta já foi configurada.
+          if (v && user) {
+            supabase.from('beautyos_settings')
+              .update({ onboarded_at: new Date().toISOString() })
+              .eq('empresa_id', user.id)
+              .then(({ error }) => {
+                if (error) console.error('Falha ao registrar onboarding:', error.message);
+              });
+          }
+        },
         setToast: (toast) => set({ toast }),
         setIsVoiceActive: (active) => set({ isVoiceActive: active }),
         setIsRecoveringPassword: (v) => set({ isRecoveringPassword: v }),
@@ -402,9 +487,15 @@ export const useStore = create<AppStore>()(
               phone: client.phone,
               tags: client.tags,
               notes: client.notes ?? null,
+              // O formulário pedia a data de nascimento e o insert a jogava
+              // fora: o aviso de aniversário nunca disparava para ninguém
+              // cadastrado pelo app.
+              birth_date: client.birthDate || null,
               spent: 0,
               visits: 0,
-              last_visit: dataLocal(),
+              // Sem visita ainda. Antes nascia com a data de hoje e a lista
+              // mostrava "Última visita: hoje" para quem nunca veio.
+              last_visit: null,
               is_vip: false,
               is_favorite: false,
             });
@@ -438,6 +529,7 @@ export const useStore = create<AppStore>()(
           try {
             const { error } = await supabase.from('beautyos_clients').delete().eq('id', id).eq('empresa_id', user.id);
             if (error) throw error;
+            set(s => ({ clients: s.clients.filter(x => x.id !== id) }));
           } catch (error) {
             handleSupabaseError(error, OperationType.DELETE, `beautyos_clients/${id}`);
           }
@@ -457,7 +549,12 @@ export const useStore = create<AppStore>()(
             let finalClientId = appointment.clientId;
 
             if (appointment.clientId === 'public-booking' || !appointment.clientId) {
-              const existingClient = clients.find(c => c.phone === appointment.clientPhone);
+              // Sem telefone não há como casar: '' === '' ligava o
+              // agendamento de uma pessoa nova ao primeiro cliente sem
+              // telefone da base, com o nome de outra pessoa.
+              const existingClient = appointment.clientPhone
+                ? clients.find(c => c.phone && c.phone === appointment.clientPhone)
+                : undefined;
               if (existingClient) {
                 finalClientId = existingClient.id;
               } else if (appointment.clientName && appointment.clientPhone) {
@@ -470,7 +567,7 @@ export const useStore = create<AppStore>()(
                     email: '',
                     spent: 0,
                     visits: 0,
-                    last_visit: appointment.date,
+                    last_visit: null,
                     is_vip: false,
                     is_favorite: false,
                     tags: ['Novo'],
@@ -569,6 +666,7 @@ export const useStore = create<AppStore>()(
           try {
             const { error } = await supabase.from('beautyos_appointments').delete().eq('id', id).eq('empresa_id', user.id);
             if (error) throw error;
+            set(s => ({ appointments: s.appointments.filter(x => x.id !== id) }));
           } catch (error) {
             handleSupabaseError(error, OperationType.DELETE, `beautyos_appointments/${id}`);
           }
@@ -598,6 +696,7 @@ export const useStore = create<AppStore>()(
           try {
             const { error } = await supabase.from('beautyos_transactions').delete().eq('id', id).eq('empresa_id', user.id);
             if (error) throw error;
+            set(s => ({ transactions: s.transactions.filter(x => x.id !== id) }));
           } catch (error) {
             handleSupabaseError(error, OperationType.DELETE, `beautyos_transactions/${id}`);
           }
@@ -637,6 +736,7 @@ export const useStore = create<AppStore>()(
           try {
             const { error } = await supabase.from('beautyos_notifications').delete().eq('id', id).eq('empresa_id', user.id);
             if (error) throw error;
+            set(s => ({ notifications: s.notifications.filter(x => x.id !== id) }));
           } catch (error) {
             handleSupabaseError(error, OperationType.DELETE, `beautyos_notifications/${id}`);
           }
@@ -648,6 +748,12 @@ export const useStore = create<AppStore>()(
 
           const appointment = appointments.find(a => a.id === id);
           if (!appointment || appointment.status === 'Concluído') return;
+
+          // O status local só muda quando o realtime devolve a atualização,
+          // depois de quatro requisições. Um segundo toque nesse intervalo
+          // passava pela checagem acima e lançava a receita de novo.
+          if (concluindo.has(id)) return;
+          concluindo.add(id);
 
           try {
             // A receita entra ANTES de marcar como concluído. Na ordem inversa,
@@ -700,6 +806,8 @@ export const useStore = create<AppStore>()(
             // que mostra "Erro ao concluir".
             console.error('Error completing appointment:', error instanceof Error ? error.message : 'unknown error');
             throw error;
+          } finally {
+            concluindo.delete(id);
           }
         },
 
@@ -752,6 +860,7 @@ export const useStore = create<AppStore>()(
           try {
             const { error } = await supabase.from('beautyos_services').delete().eq('id', id).eq('empresa_id', user.id);
             if (error) throw error;
+            set(s => ({ services: s.services.filter(x => x.id !== id) }));
           } catch (error) {
             handleSupabaseError(error, OperationType.DELETE, `beautyos_services/${id}`);
           }
@@ -768,6 +877,9 @@ export const useStore = create<AppStore>()(
             if (updates.type !== undefined) payload.type = updates.type;
             const { error } = await supabase.from('beautyos_automation_templates').update(payload).eq('id', id).eq('empresa_id', user.id);
             if (error) throw error;
+            // Aplica já. Esperando o realtime, o texto salvo voltava por um
+            // instante ao antigo — e com o canal reconectando, ficava.
+            set(s => ({ automationTemplates: s.automationTemplates.map(t => t.id === id ? { ...t, ...updates } : t) }));
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, `beautyos_automation_templates/${id}`);
           }
@@ -779,18 +891,45 @@ export const useStore = create<AppStore>()(
           try {
             const { error } = await supabase.from('beautyos_automation_logs').upsert({ id: logKey, empresa_id: user.id, sent_at: new Date().toISOString() });
             if (error) throw error;
+            set(s => ({ automationLogs: s.automationLogs.includes(logKey) ? s.automationLogs : [...s.automationLogs, logKey] }));
           } catch (error) {
             handleSupabaseError(error, OperationType.WRITE, `beautyos_automation_logs/${logKey}`);
           }
         },
 
-        updateUserAvatar: async (photoURL) => {
+        // O logo ia como data URL base64 para o user_metadata, que viaja
+        // dentro de todo token de acesso. Uma conta em produção estava com
+        // 174 KB de metadata: centenas de KB no cabeçalho de cada requisição,
+        // acima do que os proxies aceitam. E o erro era engolido aqui, então
+        // a tela dizia "Logo atualizado" mesmo quando falhava.
+        //
+        // Agora a imagem é reduzida no aparelho, sobe para o Storage e só a
+        // URL vai para o metadata e para beautyos_settings, de onde a página
+        // pública de agendamento lê.
+        updateUserAvatar: async (arquivo) => {
+          const user = get().user;
+          if (!user) return;
           try {
-            const { data, error } = await supabase.auth.updateUser({ data: { avatar_url: photoURL } });
+            const imagem = await reduzirImagem(arquivo, 512);
+            const caminho = `${user.id}/logo-${Date.now()}.jpg`;
+            const { error: erroUpload } = await supabase.storage
+              .from('beautyos-logos')
+              .upload(caminho, imagem, { contentType: 'image/jpeg' });
+            if (erroUpload) throw erroUpload;
+
+            const { data: publico } = supabase.storage.from('beautyos-logos').getPublicUrl(caminho);
+            const url = publico.publicUrl;
+
+            const { data, error } = await supabase.auth.updateUser({ data: { avatar_url: url } });
             if (error) throw error;
             if (data.user) set({ user: data.user });
+
+            // A página pública lê daqui. Falhando, o logo aparecia no app mas
+            // não para o cliente, e a tela dizia que tinha dado certo.
+            const { error: erroSettings } = await supabase.from('beautyos_settings').update({ avatar_url: url }).eq('empresa_id', user.id);
+            if (erroSettings) throw erroSettings;
           } catch (error) {
-            console.error('Error updating user avatar:', error instanceof Error ? error.message : 'unknown error');
+            handleSupabaseError(error, OperationType.UPDATE, 'avatar');
           }
         },
 
@@ -852,9 +991,12 @@ export const useStore = create<AppStore>()(
           const appointments = get().appointments;
           const today = dataLocal();
 
+          // "Projeção/Mês" somava todos os agendamentos futuros, inclusive os
+          // de meses seguintes.
+          const mes = today.slice(0, 7);
           return appointments
-            .filter(a => a.date >= today && (a.status === 'Confirmado' || a.status === 'Pendente'))
-            .reduce((acc, curr) => acc + curr.price, 0);
+            .filter(a => a.date >= today && a.date.slice(0, 7) === mes && (a.status === 'Confirmado' || a.status === 'Pendente'))
+            .reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
         },
 
         getSmartInsight: () => {

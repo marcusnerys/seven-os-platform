@@ -32,6 +32,7 @@ export default function Automation() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [rascunhos, setRascunhos] = useState<Record<string, string>>({});
 
   // Campaign state
   const [campaignOpen, setCampaignOpen] = useState(false);
@@ -80,7 +81,13 @@ export default function Automation() {
   };
 
   const sendToContact = (name: string, phone: string) => {
-    const msg = campaignMessage.replace(/{{nome}}/g, name.split(' ')[0]);
+    // Só {{nome}} era trocado: a mensagem padrão da campanha diz "promoção
+    // especial para você na {{empresa}}", e era isso, literalmente, que o
+    // cliente recebia.
+    const msg = resolveMessage(campaignMessage, {
+      nome: name.split(' ')[0],
+      empresa: settings.studioName || 'Meu Negócio',
+    });
     if (!openWhatsApp(phone, msg)) {
       setToast({ message: `${name} não tem um telefone válido cadastrado.`, type: 'error' });
     }
@@ -102,6 +109,10 @@ export default function Automation() {
     setLoadingId(id);
     try {
       await updateTemplate(id, { message });
+      setRascunhos(r => {
+        const { [id]: _salvo, ...resto } = r;
+        return resto;
+      });
       setToast({ message: "Mensagem salva com sucesso", type: 'success' });
     } catch (err) {
       setToast({ message: "Erro ao salvar mensagem", type: 'error' });
@@ -111,7 +122,7 @@ export default function Automation() {
   };
 
   const showPreview = (template: AutomationTemplate) => {
-    const resolved = resolveMessage(template.message, {
+    const resolved = resolveMessage(rascunhos[template.id] ?? template.message, {
       nome: 'Juliana Silva',
       servico: 'Design de Sobrancelhas',
       data: '15/05/2026',
@@ -195,10 +206,15 @@ export default function Automation() {
                 </div>
                 <textarea 
                   className="w-full bg-black/20 border border-white/5 rounded-xl p-4 text-[14px] text-white/90 min-h-[120px] focus:outline-none focus:border-ios-gold/30 transition-colors leading-relaxed"
-                  value={template.message}
+                  value={rascunhos[template.id] ?? template.message}
                   onChange={(e) => {
-                    const newTemplates = templates.map(t => t.id === template.id ? { ...t, message: e.target.value } : t);
-                    useStore.setState({ automationTemplates: newTemplates });
+                    // Rascunho local. Antes a edição ia direto para o estado
+                    // global: ligar ou desligar qualquer modelo refazia a
+                    // leitura do banco e apagava o que não tinha sido salvo, e
+                    // o aviso automático de aniversário já usava o texto
+                    // pela metade.
+                    const valor = e.target.value;
+                    setRascunhos(r => ({ ...r, [template.id]: valor }));
                   }}
                 />
               </div>
@@ -214,7 +230,7 @@ export default function Automation() {
                 </Button>
                 <Button 
                   className="flex-1 h-12"
-                  onClick={() => handleSave(template.id, template.message)}
+                  onClick={() => handleSave(template.id, rascunhos[template.id] ?? template.message)}
                   loading={loadingId === template.id}
                 >
                   <Save size={16} />

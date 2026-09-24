@@ -6,7 +6,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area } from 'recha
 import { ChevronDown, Plus, Trash2, TrendingUp, TrendingDown, X, FileUp, CheckSquare, Square, Loader2 } from 'lucide-react';
 import { cn, dataLocal } from '../lib/utils';
 import { useStore } from '../lib/store';
-import { readStatementWithOCR, type ParsedTransaction } from '../lib/ocr';
+import { readStatementWithOCR, sanitizarTransacoes, type ParsedTransaction } from '../lib/ocr';
+import { supabase } from '../lib/supabase';
 import { getVertical } from '../lib/vertical';
 
 export default function Financial() {
@@ -68,12 +69,19 @@ export default function Financial() {
     const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !supabaseKey) throw new Error('Supabase não configurado');
 
+    // A função exige o token de quem está logado. Com a chave pública
+    // bastando, qualquer pessoa na internet podia gastar a cota gratuita do
+    // Gemini, que é uma só para todos os negócios.
+    const { data: sessao } = await supabase.auth.getSession();
+    const token = sessao.session?.access_token;
+    if (!token) throw new Error('Sessão expirada. Entre de novo.');
+
     const res = await fetch(`${supabaseUrl}/functions/v1/parse-statement`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ fileBase64: base64, mimeType: file.type }),
     });
@@ -81,11 +89,18 @@ export default function Financial() {
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
 
-    return (data.transactions ?? []) as ParsedTransaction[];
+    return sanitizarTransacoes(data.transactions, dataLocal());
   };
 
   const handleStatementFile = async (file: File) => {
     setIsFabOpen(false);
+    // Acima do limite da função a leitura falhava e caía no modo offline, que
+    // recusa PDF pedindo "tire uma foto" — sem nunca dizer que o problema era
+    // o tamanho.
+    if (file.size > 20 * 1024 * 1024) {
+      setToast({ message: 'Arquivo grande demais. Envie até 20 MB, ou uma foto de cada página.', type: 'error' });
+      return;
+    }
     setIsParsingStatement(true);
     setParseMode('ai');
     setOcrProgress(0);
@@ -95,6 +110,13 @@ export default function Financial() {
       try {
         txs = await readWithAI(file);
       } catch (aiError) {
+        // Limite de uso ou sessão expirada não se resolvem lendo offline, e
+        // para PDF o modo offline nem existe: mostra o motivo real.
+        const motivo = (aiError as Error).message || '';
+        if (/Limite de leituras|Sessão expirada|grande demais/.test(motivo)) {
+          setToast({ message: motivo, type: 'error' });
+          return;
+        }
         // Chave expirada, sem cota ou offline: cai para o OCR local (grátis, sem chave).
         console.warn('IA indisponível, usando leitura local:', (aiError as Error).message);
         setParseMode('ocr');
@@ -179,7 +201,16 @@ export default function Financial() {
 
   const handleAddTransaction = async () => {
     const amount = Number(newTx.amount);
-    if (!amount || !newTx.category) return;
+    // Valor negativo invertia o sentido: uma receita de -50 reduzia o
+    // faturamento. O tipo já diz se é entrada ou saída.
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setToast({ message: 'Informe um valor maior que zero.', type: 'error' });
+      return;
+    }
+    if (!newTx.category) {
+      setToast({ message: 'Escolha uma categoria.', type: 'error' });
+      return;
+    }
     setIsSubmitting(true);
     try {
       await addTransaction({ ...newTx, amount });
@@ -208,7 +239,27 @@ export default function Financial() {
   const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
   const netProfit = totalRevenue - totalExpenses;
 
-  const profitData = revenueData.map((d, i) => ({ value: d.value - (expenseData[i % expenseData.length]?.value || 0) }));
+  // Resultado por dia, na ordem das datas. Antes a série subtraía a despesa
+  // de mesma posição na lista — a terceira receita menos a terceira
+  // despesa, de dias diferentes — e o gráfico de lucro não significava nada.
+  const saldoPorDia = transactions.reduce<Record<string, number>>((acc, t) => {
+    acc[t.date] = (acc[t.date] || 0) + (t.type === 'revenue' ? t.amount : -t.amount);
+    return acc;
+  }, {});
+  const diasOrdenados = Object.keys(saldoPorDia).sort().slice(-30);
+  const profitData = diasOrdenados.length
+    ? diasOrdenados.map(d => ({ value: saldoPorDia[d] }))
+    : Array(8).fill({ value: 0 });
+
+  const apagarTransacao = async (tx: { id: string; description: string; amount: number }) => {
+    if (!confirm(`Apagar "${tx.description}" de R$ ${tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) return;
+    try {
+      await deleteTransaction(tx.id);
+      setToast({ message: 'Lançamento apagado', type: 'success' });
+    } catch {
+      setToast({ message: 'Não foi possível apagar. Tente de novo.', type: 'error' });
+    }
+  };
 
   return (
     <div className="flex flex-col p-6 pb-12 overflow-y-auto h-full hide-scrollbar bg-ios-bg relative">
@@ -396,9 +447,13 @@ export default function Financial() {
                       <span className={cn("text-[16px] font-bold", tx.type === 'revenue' ? "text-ios-gold" : "text-red-400")}>
                         {tx.type === 'revenue' ? "+" : "-"} R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
+                      {/* Era opacity-0 com hover: invisível no celular, mas
+                          clicável. Tocar perto do valor apagava o lançamento
+                          na hora, sem confirmação e sem aviso. */}
                       <button 
-                        onClick={() => deleteTransaction(tx.id)}
-                        className="opacity-0 group-hover:opacity-100 p-2 text-red-500 transition-opacity"
+                        onClick={() => apagarTransacao(tx)}
+                        aria-label="Apagar lançamento"
+                        className="opacity-50 hover:opacity-100 p-2 text-red-500 transition-opacity"
                       >
                         <Trash2 size={16} />
                       </button>

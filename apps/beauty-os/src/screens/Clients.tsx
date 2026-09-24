@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { Search, Plus, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
-import { cn, escapeICS } from '../lib/utils';
+import { cn, escapeICS, formatarTelefoneBR, digitosTelefoneBR } from '../lib/utils';
 import { useStore, Client } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
@@ -100,20 +100,9 @@ export default function Clients() {
   const allTags = Array.from(new Set(clients.flatMap(c => c.tags || [])));
   const clientFallback = (name: string) => name.split(' ').map(n => n[0]).join('').substring(0, 2);
 
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    if (digits.length <= 10) {
-      return digits
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{4})(\d)/, '$1-$2')
-        .slice(0, 14);
-    } else {
-      return digits
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2')
-        .slice(0, 15);
-    }
-  };
+  // Número colado com +55 era lido com o 55 como DDD e perdia o último
+  // dígito, passando na validação com um número que não existe.
+  const formatPhone = formatarTelefoneBR;
 
   const isPhoneValid = (phone: string) => {
     const regex = /^\(\d{2}\) \d{4,5}-\d{4}$/;
@@ -147,7 +136,7 @@ export default function Clients() {
           phone: newClient.phone,
           email: newClient.email || '',
           birthDate: newClient.birthDate || '',
-          tags: newClient.tags ? newClient.tags.split(',').map(t => t.trim()) : [],
+          tags: newClient.tags ? newClient.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
         });
         setToast({ message: `${vertical.clientNoun} atualizad${fem ? 'a' : 'o'}`, type: 'success' });
       } else {
@@ -156,7 +145,7 @@ export default function Clients() {
           phone: newClient.phone,
           email: newClient.email || '',
           birthDate: newClient.birthDate || '',
-          tags: newClient.tags ? newClient.tags.split(',').map(t => t.trim()) : [],
+          tags: newClient.tags ? newClient.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
           isVIP: false,
           isFavorite: false
         });
@@ -182,8 +171,18 @@ export default function Clients() {
     }
   };
 
+  // O perfil guardava uma cópia do cliente: favoritar mudava o banco mas o
+  // botão continuava igual, e o segundo toque desfazia. Lê do estado vivo.
+  const favoritoAtual = selectedClient
+    ? (clients.find(c => c.id === selectedClient.id)?.isFavorite ?? selectedClient.isFavorite)
+    : false;
+
   const filteredClients = clients.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search);
+    // Telefone compara só dígitos: quem digitava "11999998888" não achava
+    // "(11) 99999-8888".
+    const digitosBusca = search.replace(/\D/g, '');
+    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (digitosBusca.length >= 3 && digitosTelefoneBR(c.phone).includes(digitosTelefoneBR(digitosBusca)));
     const matchesFilter = 
       filterType === 'all' ? true :
       filterType === 'favorite' ? c.isFavorite :
@@ -338,8 +337,14 @@ export default function Clients() {
         </div>
       </div>
 
-      <button 
-        onClick={() => setIsAddModalOpen(true)}
+      <button
+        onClick={() => {
+          // Cancelar uma edição deixava o formulário preenchido: o "+"
+          // abria "Novo cliente" com o nome e o telefone de outra pessoa.
+          setEditingClient(null);
+          setNewClient({ name: '', phone: '', email: '', tags: '', birthDate: '' });
+          setIsAddModalOpen(true);
+        }}
         className="absolute bottom-6 right-6 w-12 h-12 rounded-full bg-ios-gold flex items-center justify-center text-ios-bg shadow-[0_10px_20px_rgba(230,192,139,0.3)] active:scale-95 transition-transform z-30"
       >
         <Plus size={24} strokeWidth={2.5} />
@@ -356,19 +361,23 @@ export default function Clients() {
               <div className="flex flex-col gap-3">
                 <div className="flex gap-4">
                   <Button variant="secondary" className="flex-1 h-14" onClick={() => {
-                    const phone = selectedClient.phone.replace(/\D/g, '');
-                    window.open(`https://wa.me/55${phone}`, '_blank');
+                    // Montava wa.me/55 + dígitos por conta própria: número já
+                    // com 55 virava 5555..., e cadastro sem telefone abria o
+                    // WhatsApp sem destinatário.
+                    if (!openWhatsApp(selectedClient.phone, '')) {
+                      setToast({ message: `${selectedClient.name} não tem um telefone válido.`, type: 'error' });
+                    }
                   }}>
                     <MessageCircle size={20} />
                     WhatsApp
                   </Button>
                   <Button 
-                    variant={selectedClient.isFavorite ? 'primary' : 'secondary'} 
+                    variant={favoritoAtual ? 'primary' : 'secondary'}
                     className="flex-1 h-14"
                     onClick={() => toggleFavorite(selectedClient.id)}
                   >
-                    <Heart size={20} fill={selectedClient.isFavorite ? "currentColor" : "none"} />
-                    {selectedClient.isFavorite ? 'Favorita' : 'Favoritar'}
+                    <Heart size={20} fill={favoritoAtual ? "currentColor" : "none"} />
+                    {favoritoAtual ? (fem ? 'Favorita' : 'Favorito') : 'Favoritar'}
                   </Button>
                 </div>
                 <div className="flex gap-4">
@@ -389,10 +398,16 @@ export default function Clients() {
                   <Button 
                     variant="secondary" 
                     className="flex-1 text-red-100 hover:text-red-400 border border-red-900/20 h-14"
-                    onClick={() => {
-                      if (confirm(`Excluir ${selectedClient.name}?`)) {
-                        deleteClient(selectedClient.id);
+                    onClick={async () => {
+                      if (!confirm(`Excluir ${selectedClient.name}?`)) return;
+                      // Sem await a falha sumia: o perfil fechava e a pessoa
+                      // continuava na lista sem explicação.
+                      try {
+                        await deleteClient(selectedClient.id);
                         setSelectedClient(null);
+                        setToast({ message: `${selectedClient.name} excluíd${fem ? 'a' : 'o'}`, type: 'success' });
+                      } catch {
+                        setToast({ message: 'Não foi possível excluir. Tente de novo.', type: 'error' });
                       }
                     }}
                   >
@@ -528,13 +543,15 @@ export default function Clients() {
             onClose={() => {
               setIsAddModalOpen(false);
               setEditingClient(null);
-            }} 
+              setNewClient({ name: '', phone: '', email: '', tags: '', birthDate: '' });
+            }}  
             title={editingClient ? `Editar ${vertical.clientNoun}` : `${fem ? 'Nova' : 'Novo'} ${vertical.clientNoun}`}
             footer={
               <div className="grid grid-cols-2 gap-3">
                 <Button variant="secondary" onClick={() => {
                   setIsAddModalOpen(false);
                   setEditingClient(null);
+                  setNewClient({ name: '', phone: '', email: '', tags: '', birthDate: '' });
                 }}>
                   Cancelar
                 </Button>

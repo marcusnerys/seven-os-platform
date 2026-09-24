@@ -61,9 +61,43 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'GEMINI_API_KEY não configurada no projeto' }, 500);
     }
 
+    // Só quem está logado no app. Antes a chave pública — que está no bundle
+    // de qualquer visitante — bastava para chamar esta função, e a cota
+    // gratuita do Gemini é uma só para todos os negócios: esgotada por um
+    // terceiro, a leitura de extrato parava para todo mundo.
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return json({ error: 'Entre no app para ler extratos.' }, 401);
+    }
+    const quem = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+    });
+    if (!quem.ok) {
+      return json({ error: 'Sessão expirada. Entre de novo.' }, 401);
+    }
+
+    // Cota por pessoa e por hora (migration 0016). Criar conta é livre, então
+    // só o login não impedia uma conta descartável de esgotar o Gemini de
+    // todos. Falha na contagem deixa passar: proteção, não cobrança.
+    const uso = await fetch(`${SUPABASE_URL}/rest/v1/rpc/beautyos_registrar_uso_ia`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: '{}',
+    }).then(r => (r.ok ? r.json() : true)).catch(() => true);
+    if (uso === false) {
+      return json({ error: 'Limite de leituras desta hora atingido. Tente de novo mais tarde.' }, 429);
+    }
+
     const { fileBase64, mimeType } = await req.json();
     if (!fileBase64 || !mimeType) {
       return json({ error: 'fileBase64 e mimeType são obrigatórios' }, 400);
+    }
+    // ~20 MB de arquivo. É o que a função aguenta com folga na memória; o
+    // app confere o tamanho antes de enviar e avisa quem passar disso.
+    if (String(fileBase64).length > 27_000_000) {
+      return json({ error: 'Arquivo grande demais. Envie até 20 MB.' }, 413);
     }
 
     // Data de hoje em São Paulo, não em UTC. A função roda num servidor em
@@ -111,7 +145,9 @@ Regras:
           },
         ],
       }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+      // 4096 cortava o JSON de extratos mensais com muitas linhas: a resposta
+      // chegava truncada, não parseava, e o PDF inteiro falhava.
+      generationConfig: { temperature: 0.1, maxOutputTokens: 16384 },
     });
 
     // Repete em fila cheia (429) e indisponibilidade momentânea (503), e

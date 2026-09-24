@@ -19,7 +19,7 @@ import {
   Users,
   CalendarDays
 } from 'lucide-react';
-import { cn, dataLocal, escapeICS } from '../lib/utils';
+import { cn, dataLocal, escapeICS, fimDoEventoICS, digitosTelefoneBR, formatarTelefoneBR } from '../lib/utils';
 import { applyTheme } from '../components/ThemeOnboarding';
 
 import { supabase } from '../lib/supabase';
@@ -71,22 +71,15 @@ export default function More() {
       return;
     }
 
-    const reader = new FileReader();
-    // A gravação relança em caso de erro. Sem este try a rejeição escapava de
-    // um handler assíncrono: a linha do aviso de sucesso nunca rodava e o
-    // usuário ficava sem sinal nenhum, achando que o logo tinha subido.
-    reader.onloadend = async () => {
-      try {
-        await updateUserAvatar(reader.result as string);
-        setToast({ message: 'Logo atualizado com sucesso', type: 'success' });
-      } catch {
-        setToast({ message: 'Não foi possível salvar o logo. Tente novamente.', type: 'error' });
-      }
-    };
-    reader.onerror = () => {
-      setToast({ message: 'Não foi possível ler o arquivo escolhido.', type: 'error' });
-    };
-    reader.readAsDataURL(file);
+    // O arquivo vai direto para o store, que reduz a imagem e sobe para o
+    // Storage. A gravação relança em caso de erro; sem este try o aviso de
+    // sucesso aparecia mesmo quando o logo não tinha subido.
+    try {
+      await updateUserAvatar(file);
+      setToast({ message: 'Logo atualizado com sucesso', type: 'success' });
+    } catch {
+      setToast({ message: 'Não foi possível salvar o logo. Tente novamente.', type: 'error' });
+    }
   };
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -100,7 +93,9 @@ export default function More() {
   const inputBg = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)';
   const inputBorder = isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.10)';
 
-  const [newService, setNewService] = useState({ name: '', price: 0, duration: 60 });
+  // Preço como texto: com número, campo vazio virava 0 e o serviço era
+  // salvo a R$ 0 sem aviso — e a reserva online passava a gravar R$ 0.
+  const [newService, setNewService] = useState({ name: '', price: '', duration: 60 });
   const [editSettings, setEditSettings] = useState(settings);
 
   const importPhoneContacts = async () => {
@@ -113,15 +108,24 @@ export default function More() {
       setLoadingAction('import-contacts');
       const picked = await nav.contacts.select(['name', 'tel', 'email'], { multiple: true });
       if (!picked || picked.length === 0) return;
+      // Compara só os dígitos nacionais. O telefone importado era gravado
+      // cru ("5511999998888") e comparado com o cadastrado à mão, que é
+      // formatado ("(11) 99999-8888"): nunca batiam, e importar a agenda do
+      // celular duplicava todo mundo que já estava cadastrado.
+      const jaCadastrados = new Set(clients.map(cl => digitosTelefoneBR(cl.phone)).filter(Boolean));
       let added = 0;
       for (const c of picked) {
         const name = c.name?.[0] || '';
-        const phone = (c.tel?.[0] || '').replace(/\D/g, '');
+        const digitos = digitosTelefoneBR(c.tel?.[0] || '');
         const email = c.email?.[0] || '';
         if (!name) continue;
-        const alreadyExists = clients.some(cl => cl.phone && cl.phone === phone);
-        if (alreadyExists) continue;
+        if (digitos && jaCadastrados.has(digitos)) continue;
+        // Só formata número nacional completo. Sem DDD ou estrangeiro fica
+        // com os dígitos, como antes: descartar deixava o cliente sem
+        // telefone e a reimportação o duplicava toda vez.
+        const phone = digitos.length === 10 || digitos.length === 11 ? formatarTelefoneBR(digitos) : digitos;
         await addClient({ name, phone, email, tags: ['Importado'], isVIP: false, isFavorite: false });
+        if (digitos) jaCadastrados.add(digitos);
         added++;
       }
       setToast({ message: added > 0 ? `${added} contato${added > 1 ? 's' : ''} importado${added > 1 ? 's' : ''}` : 'Nenhum contato novo para importar', type: 'success' });
@@ -146,10 +150,7 @@ export default function More() {
       const [y, m, d] = appt.date.split('-');
       const [h, min] = appt.time.split(':');
       const dtStart = `${y}${pad(m)}${pad(d)}T${pad(h)}${pad(min)}00`;
-      const endMin = Number(h) * 60 + Number(min) + (appt.duration || 60);
-      const endH = String(Math.floor(endMin / 60) % 24).padStart(2, '0');
-      const endM = String(endMin % 60).padStart(2, '0');
-      const dtEnd = `${y}${pad(m)}${pad(d)}T${endH}${endM}00`;
+      const dtEnd = fimDoEventoICS(appt.date, appt.time, appt.duration || 60);
       const clientName = appt.clientName || clients.find(c => c.id === appt.clientId)?.name || 'Cliente';
       return [
         'BEGIN:VEVENT',
@@ -173,9 +174,13 @@ export default function More() {
     setToast({ message: `${upcoming.length} agendamento${upcoming.length > 1 ? 's' : ''} exportado${upcoming.length > 1 ? 's' : ''} para calendário`, type: 'success' });
   };
 
+  // Só ao abrir o modal. Com [settings] como dependência, qualquer
+  // releitura das configurações — que acontece ao voltar para o app, quando
+  // o token é renovado — apagava o que a pessoa estava digitando.
   useEffect(() => {
-    setEditSettings(settings);
-  }, [settings]);
+    if (isSettingsOpen) setEditSettings(settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSettingsOpen]);
   
   const handleLogout = async () => {
     try {
@@ -213,11 +218,30 @@ export default function More() {
   };
 
   const handleAddService = async () => {
-    if (!newService.name || !newService.price) return;
+    // Retornava calado com nome ou preço vazio, e serviço gratuito
+    // ("Avaliação") não podia ser cadastrado.
+    if (!newService.name.trim()) {
+      setToast({ message: 'Dê um nome ao serviço.', type: 'error' });
+      return;
+    }
+    if (services.some(s => s.name.trim().toLowerCase() === newService.name.trim().toLowerCase())) {
+      // A reserva pública acha o serviço pelo nome; dois iguais com preços
+      // diferentes gravariam o errado (o banco também recusa, migration 0016).
+      setToast({ message: 'Já existe um serviço com esse nome.', type: 'error' });
+      return;
+    }
+    if (newService.price.trim() === '' || !Number.isFinite(Number(newService.price.replace(',', '.'))) || Number(newService.price.replace(',', '.')) < 0) {
+      setToast({ message: 'Informe um preço válido (pode ser zero).', type: 'error' });
+      return;
+    }
     setLoadingAction('add-service');
     try {
-      await addService(newService);
-      setNewService({ name: '', price: 0, duration: 60 });
+      await addService({
+        name: newService.name.trim(),
+        price: Number(newService.price.replace(',', '.')),
+        duration: newService.duration || 60,
+      });
+      setNewService({ name: '', price: '', duration: 60 });
       setToast({ message: "Serviço adicionado", type: 'success' });
     } catch (err) {
       setToast({ message: "Erro ao adicionar serviço", type: 'error' });
@@ -374,8 +398,8 @@ export default function More() {
                       placeholder="Preço (R$)"
                       className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none"
                       style={{ color: textPrimary, background: inputBg, borderColor: inputBorder }}
-                      value={newService.price || ''}
-                      onChange={e => setNewService({ ...newService, price: parseFloat(e.target.value) })}
+                      value={newService.price}
+                      onChange={e => setNewService({ ...newService, price: e.target.value })}
                     />
                     <input 
                       type="number"
@@ -404,8 +428,17 @@ export default function More() {
                         <p className="font-bold leading-tight" style={{ color: textPrimary }}>{s.name}</p>
                         <p className="text-[12px] text-ios-text-secondary font-medium">R$ {s.price} • {s.duration} min</p>
                       </div>
-                      <button 
-                        onClick={() => deleteService(s.id)}
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Excluir o serviço "${s.name}"?`)) return;
+                          try {
+                            await deleteService(s.id);
+                            setToast({ message: 'Serviço excluído', type: 'success' });
+                          } catch {
+                            setToast({ message: 'Não foi possível excluir. Tente de novo.', type: 'error' });
+                          }
+                        }}
+                        aria-label={`Excluir ${s.name}`}
                         className="p-2 text-red-400/50 hover:text-red-400 transition-colors"
                       >
                         <Trash2 size={18} />

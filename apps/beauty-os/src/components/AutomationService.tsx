@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
-import { dataLocal } from '../lib/utils';
+import { dataLocal, ehAniversarioHoje } from '../lib/utils';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 import { Modal, Button } from './UI';
 import { Gift, MessageCircle, X } from 'lucide-react';
@@ -35,9 +35,8 @@ export function AutomationService() {
       // Sem telefone não há para onde mandar: aparecer na lista só gera um
       // link do WhatsApp sem destinatário.
       const birthdays = clients.filter(c => {
-        if (!c.birthDate) return false;
         if (String(c.phone ?? '').replace(/\D/g, '').length < 10) return false;
-        return c.birthDate.substring(5) === currentMonthDay;
+        return ehAniversarioHoje(c.birthDate, todayStr);
       });
 
       if (birthdays.length > 0) {
@@ -55,7 +54,7 @@ export function AutomationService() {
   }, [user, clients, automationTemplates, automationLogs]);
 
   const handleSendAll = async () => {
-    const template = automationTemplates.find(t => t.type === 'birthday');
+    const template = automationTemplates.find(t => t.type === 'birthday' && t.isActive);
     if (!template) return;
 
     // We can't really "bulk send" in browser tabs easily without being blocked
