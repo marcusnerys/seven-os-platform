@@ -88,6 +88,8 @@ export default function BookingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState('');
+  // Força nova leitura dos horários depois de uma recusa por conflito.
+  const [versaoHorarios, setVersaoHorarios] = useState(0);
   const [clientInfo, setClientInfo] = useState({ name: '', phone: '', notes: '' });
   const [honeypot, setHoneypot] = useState('');
   const [phoneError, setPhoneError] = useState(false);
@@ -145,7 +147,14 @@ export default function BookingPage() {
       }
       setOccupiedSlots((data ?? []).map((r: any) => ({ time: r.time, duration: Number(r.duration) || 60 })));
     });
-  }, [selectedDate, userId]);
+  }, [selectedDate, userId, versaoHorarios]);
+
+  // Trocar a data ou o serviço invalida o horário escolhido. Antes ele
+  // ficava marcado: um horário livre na quarta seguia selecionado depois de
+  // mudar para a quinta, onde estava ocupado, e só o envio acusava.
+  useEffect(() => {
+    setSelectedTime('');
+  }, [selectedDate, selectedService]);
 
   const filteredServices = useMemo(() => (services ?? []).filter(s => {
     const matchSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -214,11 +223,18 @@ export default function BookingPage() {
           horario_no_passado: 'Esse horário já passou. Escolha uma data ou hora à frente.',
           estudio_inexistente: 'Link de agendamento inválido. Peça o endereço novamente.',
           duracao_invalida: 'Não foi possível agendar esse serviço. Fale com o estabelecimento.',
+          servico_inexistente: 'Esse serviço não está mais disponível. Recarregue a página e escolha de novo.',
+          horario_invalido: 'Horário inválido. Escolha um dos horários da lista.',
+          data_invalida: 'Escolha uma data dentro dos próximos dias.',
+          nome_invalido: 'Informe seu nome para reservar.',
         };
         setToast({ message: recados[falha] ?? 'Não foi possível concluir a reserva. Tente novamente.', type: 'error' });
         // Volta para a escolha de horário: insistir no mesmo slot ocupado
         // recairia no mesmo erro.
         if (falha === 'horario_ocupado' || falha === 'horario_no_passado') {
+          // Relê os horários: sem isso a lista continuava mostrando como
+          // livre o horário que acabou de ser recusado.
+          setVersaoHorarios(v => v + 1);
           setSelectedTime('');
           setStep(3);
         }

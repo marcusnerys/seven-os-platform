@@ -18,6 +18,7 @@ import { GoogleGenAI } from "@google/genai";
 interface Req {
   method?: string;
   body?: any;
+  headers?: Record<string, string | string[] | undefined>;
 }
 interface Res {
   status(codigo: number): Res;
@@ -92,8 +93,50 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     return;
   }
 
+  // Só quem está logado no app. A rota era pública: qualquer pessoa na
+  // internet podia chamá-la e gastar a cota gratuita do Gemini, que é uma só
+  // para todos os negócios — esgotada, o assistente parava para todo mundo.
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const token = String(req.headers?.authorization ?? '').replace(/^Bearer\s+/i, '');
+  if (!token || !supabaseUrl || !supabaseAnon) {
+    res.status(401).json({ error: 'Entre no app para usar o assistente.' });
+    return;
+  }
+  const quem = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnon },
+  });
+  if (!quem.ok) {
+    res.status(401).json({ error: 'Sessão expirada. Entre de novo.' });
+    return;
+  }
+
+  // Login sozinho não protege a cota: criar conta é livre, e uma conta
+  // descartável em loop esgotava o Gemini de todos os negócios. O uso é
+  // contado por pessoa e por hora no banco (migration 0016). Se a contagem
+  // falhar por rede, deixa passar — é proteção contra abuso, não cobrança.
+  const uso = await fetch(`${supabaseUrl}/rest/v1/rpc/beautyos_registrar_uso_ia`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnon, 'Content-Type': 'application/json' },
+    body: '{}',
+  }).then(r => (r.ok ? r.json() : true)).catch(() => true);
+  if (uso === false) {
+    res.status(429).json({ error: 'Você usou o assistente muitas vezes nesta hora. Tente de novo mais tarde.' });
+    return;
+  }
+
   const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const { mode, text, context, storeSnapshot } = corpo;
+  if (typeof text === 'string' && text.length > 1000) {
+    res.status(400).json({ error: 'Comando longo demais.' });
+    return;
+  }
+  // Contexto e retrato do negócio vão inteiros para o prompt; sem teto,
+  // uma chamada podia mandar megabytes e gastar a cota de uma vez.
+  if (JSON.stringify(corpo).length > 60_000) {
+    res.status(413).json({ error: 'Dados demais para o assistente.' });
+    return;
+  }
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -103,7 +146,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     if (mode === 'insight') {
       const { todayAppointments = [], inactiveClients = [], recentRevenue = 0, recentExpenses = 0, totalClients = 0 } = storeSnapshot || {};
 
-      const prompt = `Você é a IA operacional do Leshanot Studio — um sistema de gestão de beleza.
+      const prompt = `Você é a IA operacional do Leshanot OS — um sistema de gestão para pequenos negócios (salões, oficinas, prestadores de serviço).
 Hoje é ${todayString}.
 
 DADOS DO NEGÓCIO HOJE:
@@ -132,7 +175,7 @@ TAREFA: Gere um briefing de boas-vindas personalizado e proativo. Seja direto, c
 
     const response = await comRepeticao(modelo => ai.models.generateContent({
       model: modelo,
-      contents: `Você é o assistente operacional (AI) do Leshanot Studio. O sistema é voltado para gestão de estética.
+      contents: `Você é o assistente operacional (AI) do Leshanot OS, um sistema de gestão para pequenos negócios: salões, oficinas, prestadores de serviço. Entenda o vocabulário de qualquer um deles ("troca de óleo", "revisão", "corte", "manicure").
 Comando: "${text}"
 Contexto: ${JSON.stringify(context || {})}
 Hoje: ${todayString}
@@ -141,8 +184,8 @@ Ações Suportadas:
 - create_appointment: {clientName, service, date, time}
 - cancel_appointment: {clientName, date, time}
 - create_client: {name, phone?}
-- create_revenue: {amount, description?}
-- create_expense: {amount, description, category?}
+- create_revenue: {amount, description?, date?}
+- create_expense: {amount, description, category?, date?}
 - update_client_notes: {clientName, notes}
 - update_client_vip: {clientName, isVIP}
 - create_service: {name, price, duration?}
@@ -249,6 +292,6 @@ JSON:
       res.status(503).json({ error: 'Assistente ocupado no momento. Tente de novo em instantes.' });
       return;
     }
-    res.status(500).json({ error: "Failed to process voice command" });
+    res.status(500).json({ error: 'Não consegui entender o comando agora. Tente de novo.' });
   }
 }
