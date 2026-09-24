@@ -29,6 +29,12 @@ export default function Login() {
       if (error.code === 'email_not_confirmed' || error.message.toLowerCase().includes('not confirmed')) {
         setNeedsConfirmation(true);
         setError('Sua conta ainda não foi confirmada. Procure o e-mail que enviamos (veja também o spam).');
+      } else if (error.status === 429 || error.code === 'over_request_rate_limit') {
+        setError('Muitas tentativas seguidas. Espere alguns minutos e tente de novo.');
+      } else if (!error.status || error.name === 'AuthRetryableFetchError') {
+        // Sem conexão caía em "senha incorreta", e a pessoa ia redefinir uma
+        // senha que estava certa.
+        setError('Sem conexão com o servidor. Verifique a internet e tente de novo.');
       } else {
         setError('E-mail ou senha incorretos.');
       }
