@@ -91,3 +91,112 @@ export function agoraEmSaoPaulo(): { dia: string; minutos: number } {
     minutos: Number(get('hour')) * 60 + Number(get('minute')),
   };
 }
+
+/**
+ * Dígitos de um telefone brasileiro sem código do país: DDD + número.
+ *
+ * Número colado da agenda do celular chega como "+55 11 99999-8888" ou
+ * "011 99999-8888". Tratando só os dígitos crus, o formatador lia o 55 como
+ * DDD e cortava o último dígito — "(55) 11999-9988" passava na validação e
+ * era gravado errado, e o WhatsApp recebia um número que não existe.
+ */
+export function digitosTelefoneBR(raw: string): string {
+  let d = String(raw ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
+  return d.replace(/^0+/, '');
+}
+
+/**
+ * Formata progressivamente enquanto a pessoa digita: (11) 99999-8888.
+ *
+ * O código do país só é removido quando o texto chega de fora do campo —
+ * colado ou importado ("+55 11 ...", "5511..."). Digitando num campo que já
+ * começa com "(", um dígito a mais é ignorado: tratar o DDD 55 (RS) como
+ * código do país transformava "(55) 99999-8888" em outro número inteiro.
+ */
+export function formatarTelefoneBR(raw: string): string {
+  const texto = String(raw ?? '');
+  const digitado = texto.trimStart().startsWith('(');
+  const d = (digitado ? texto.replace(/\D/g, '') : digitosTelefoneBR(texto)).slice(0, 11);
+  if (d.length <= 2) return d ? `(${d}` : '';
+  const ddd = d.slice(0, 2);
+  const resto = d.slice(2);
+  if (d.length <= 10) {
+    return resto.length > 4 ? `(${ddd}) ${resto.slice(0, 4)}-${resto.slice(4)}` : `(${ddd}) ${resto}`;
+  }
+  return `(${ddd}) ${resto.slice(0, 5)}-${resto.slice(5)}`;
+}
+
+/**
+ * Fim de um evento no formato iCalendar (YYYYMMDDTHHMMSS), virando o dia
+ * quando passa da meia-noite. Antes o dia ficava fixo e só a hora dava a
+ * volta: um atendimento das 23h com duas horas terminava às 01h do MESMO
+ * dia, antes de começar, e o aplicativo de calendário recusava o evento.
+ */
+export function fimDoEventoICS(data: string, hora: string, duracaoMin: number): string {
+  const [a, m, d] = data.split('-').map(Number);
+  const [h, min] = hora.split(':').map(Number);
+  const fim = new Date(Date.UTC(a, m - 1, d, h, min + (duracaoMin || 60)));
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${fim.getUTCFullYear()}${p(fim.getUTCMonth() + 1)}${p(fim.getUTCDate())}T${p(fim.getUTCHours())}${p(fim.getUTCMinutes())}00`;
+}
+
+/**
+ * Se hoje é aniversário. Quem nasceu em 29/02 é lembrado em 28/02 nos anos
+ * que não são bissextos — antes simplesmente não aparecia em três de cada
+ * quatro anos.
+ */
+export function ehAniversarioHoje(dataNascimento: string | undefined, hoje: string): boolean {
+  if (!dataNascimento || dataNascimento.length < 10) return false;
+  const mesDiaNasc = dataNascimento.slice(5, 10);
+  const mesDiaHoje = hoje.slice(5, 10);
+  if (mesDiaNasc === mesDiaHoje) return true;
+
+  const ano = Number(hoje.slice(0, 4));
+  const bissexto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0;
+  return mesDiaNasc === '02-29' && mesDiaHoje === '02-28' && !bissexto;
+}
+
+/** Minúsculas, sem acento e com espaços normalizados, para comparar nomes. */
+export const semAcento = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+/**
+ * Acha uma pessoa pelo nome falado, com a confiança da correspondência.
+ *
+ * Antes era `nome.includes(falado)` e valia o primeiro da lista: "Ana" casava
+ * com "Mariana", "Luana" e "Juliana". Um comando de voz marcava horário, dava
+ * VIP ou mandava WhatsApp para a pessoa errada. Agora a busca vai por níveis
+ * — nome idêntico, depois palavras inteiras no início do nome, depois palavra
+ * inteira em qualquer posição, depois trecho — e se mais de uma pessoa empata
+ * no melhor nível, devolve `ambiguo` para o assistente perguntar em vez de
+ * escolher sozinho.
+ */
+export function acharPorNome<T extends { name: string }>(
+  lista: T[],
+  falado: string
+): { item: T | null; ambiguo: boolean } {
+  const alvo = semAcento(falado || '');
+  if (!alvo) return { item: null, ambiguo: false };
+
+  const palavrasAlvo = alvo.split(' ');
+  const niveis: Array<(nome: string) => boolean> = [
+    nome => nome === alvo,
+    nome => {
+      const palavras = nome.split(' ');
+      return palavrasAlvo.every((p, i) => palavras[i] === p);
+    },
+    nome => {
+      const palavras = nome.split(' ');
+      return palavrasAlvo.every(p => palavras.includes(p));
+    },
+    nome => nome.includes(alvo),
+  ];
+
+  for (const casa of niveis) {
+    const achados = lista.filter(x => casa(semAcento(x.name || '')));
+    if (achados.length === 1) return { item: achados[0], ambiguo: false };
+    if (achados.length > 1) return { item: null, ambiguo: true };
+  }
+  return { item: null, ambiguo: false };
+}

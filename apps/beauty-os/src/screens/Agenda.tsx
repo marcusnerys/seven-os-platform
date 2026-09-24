@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input, Textarea } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { Plus, ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon, User, MessageCircle, Trash2, X, CalendarPlus, Download } from 'lucide-react';
-import { cn, dataLocal, escapeICS } from '../lib/utils';
+import { cn, dataLocal, escapeICS, fimDoEventoICS } from '../lib/utils';
 import { useStore, Appointment } from '../lib/store';
 import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 
@@ -43,6 +43,7 @@ export default function Agenda() {
     notes: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [concluindo, setConcluindo] = useState(false);
   const [whatsappPrompt, setWhatsappPrompt] = useState<{ phone: string, message: string, title?: string } | null>(null);
 
   const triggerAutomation = (type: string, appt: any) => {
@@ -98,10 +99,18 @@ export default function Agenda() {
     );
 
     if (isDuplicate) {
-      if (!confirm("Já existe um agendamento para esta cliente e serviço no mesmo dia. Deseja continuar?")) {
+      if (!confirm("Já existe um agendamento desse serviço para essa pessoa no mesmo dia. Deseja continuar?")) {
         return;
       }
     }
+
+    // O agendamento criado aqui saía sem client_name nem client_phone. A
+    // receita da conclusão virava "Conclusão: Corte - Cliente" e o
+    // cancelamento por voz não o encontrava pelo nome.
+    const clienteEscolhido = clients.find(c => c.id === newAppt.clientId);
+    const identificacao = clienteEscolhido
+      ? { clientName: clienteEscolhido.name, clientPhone: clienteEscolhido.phone }
+      : {};
 
     setIsSubmitting(true);
     try {
@@ -112,7 +121,7 @@ export default function Agenda() {
           setIsSubmitting(false);
           return;
         }
-        await updateAppointment(editingAppointment.id, { ...newAppt, price: Number(newAppt.price) });
+        await updateAppointment(editingAppointment.id, { ...newAppt, ...identificacao, price: Number(newAppt.price) });
         setToast({ message: "Agendamento atualizado", type: 'success' });
       } else {
         // Conflict check for new
@@ -124,6 +133,7 @@ export default function Agenda() {
 
         await addAppointment({
           ...newAppt,
+          ...identificacao,
           price: Number(newAppt.price),
           status: 'Confirmado'
         });
@@ -187,10 +197,7 @@ export default function Agenda() {
     const [h, min] = appt.time.split(':');
     const padded = (n: string) => n.padStart(2, '0');
     const dtStart = `${y}${padded(m)}${padded(d)}T${padded(h)}${padded(min)}00`;
-    const endMin = Number(h) * 60 + Number(min) + (appt.duration || 60);
-    const endH = String(Math.floor(endMin / 60) % 24).padStart(2, '0');
-    const endM = String(endMin % 60).padStart(2, '0');
-    const dtEnd = `${y}${padded(m)}${padded(d)}T${endH}${endM}00`;
+    const dtEnd = fimDoEventoICS(appt.date, appt.time, appt.duration || 60);
     const clientName = getClientName(appt);
     const ics = [
       'BEGIN:VCALENDAR',
@@ -390,7 +397,9 @@ export default function Agenda() {
                   icon: MessageCircle,
                   color: 'bg-[#25D366]',
                   action: () => {
-                    const upcoming = displayAppointments.find(a => a.status !== 'Cancelado');
+                    // Só atendimento em aberto: antes pegava o primeiro do dia
+                    // mesmo já concluído e mandava "confirmando seu horário".
+                    const upcoming = displayAppointments.find(a => a.status === 'Confirmado' || a.status === 'Pendente');
                     if (upcoming) {
                       const client = clients.find(c => c.id === upcoming.clientId);
                       const phone = client?.phone || upcoming.clientPhone;
@@ -412,7 +421,11 @@ export default function Agenda() {
                   color: 'bg-red-500/90',
                   action: async () => {
                     if (displayAppointments.length === 1) {
-                      if (confirm(`Apagar agendamento de ${getClientName(displayAppointments[0])}?`)) {
+                      // Concluído não se apaga: a receita dele já está no
+                      // Financeiro, e o atendimento sumiria da conta.
+                      if (displayAppointments[0].status === 'Concluído') {
+                        setToast({ message: 'Atendimento concluído não pode ser apagado: a receita dele já está no Financeiro.', type: 'error' });
+                      } else if (confirm(`Apagar agendamento de ${getClientName(displayAppointments[0])}?`)) {
                         // Sem await, a falha virava rejeição não tratada e o
                         // aviso de sucesso aparecia mesmo com o agendamento
                         // ainda na agenda.
@@ -424,7 +437,7 @@ export default function Agenda() {
                         }
                       }
                     } else {
-                      setToast({ message: 'Toque no agendamento e selecione Cancelar para apagar', type: 'success' });
+                      setToast({ message: 'Toque no agendamento e escolha Cancelar ou Excluir.', type: 'success' });
                     }
                     setIsFabOpen(false);
                   },
@@ -498,15 +511,22 @@ export default function Agenda() {
                   </Button>
                 )}
                 {selectedAppointment.status === 'Confirmado' && (
-                  <Button 
+                  <Button
                     className="w-full h-14"
+                    loading={concluindo}
+                    disabled={concluindo}
                     onClick={async () => {
+                      // Sem estado de carregamento, o segundo toque durante as
+                      // quatro requisições lançava a receita duas vezes.
+                      setConcluindo(true);
                       try {
                         await completeAppointment(selectedAppointment.id);
                         setSelectedAppointment(null);
                         triggerAutomation('post_attendance', selectedAppointment);
                       } catch (err) {
                         setToast({ message: "Erro ao concluir", type: 'error' });
+                      } finally {
+                        setConcluindo(false);
                       }
                     }}
                   >
@@ -542,23 +562,50 @@ export default function Agenda() {
                   >
                     Editar
                   </Button>
-                  <Button 
-                    variant="secondary" 
-                    className="flex-1 h-14 text-red-100 hover:text-red-400 border border-red-900/20"
-                    onClick={async () => {
-                      if (confirm('Cancelar este agendamento?')) {
+                  {/* Cancelar marca como Cancelado em vez de apagar. Apagando,
+                      o segmento de campanha "quem cancelou" ficava sempre
+                      vazio, o histórico do cliente sumia, e um atendimento já
+                      Concluído podia ser removido com a receita dele ainda
+                      lançada no Financeiro. */}
+                  {/* Cancelado lançado por engano precisa de um jeito de sair
+                      da agenda. Concluído não: tem receita lançada. */}
+                  {selectedAppointment.status === 'Cancelado' && (
+                    <Button
+                      variant="secondary"
+                      className="flex-1 h-14 text-red-100 hover:text-red-400 border border-red-900/20"
+                      onClick={async () => {
+                        if (!confirm('Excluir este agendamento da agenda?')) return;
                         try {
                           await deleteAppointment(selectedAppointment.id);
                           setSelectedAppointment(null);
-                          setToast({ message: "Agendamento cancelado", type: 'success' });
-                        } catch (err) {
-                          setToast({ message: "Erro ao cancelar agendamento", type: 'error' });
+                          setToast({ message: 'Agendamento excluído', type: 'success' });
+                        } catch {
+                          setToast({ message: 'Erro ao excluir agendamento', type: 'error' });
                         }
-                      }
-                    }}
-                  >
-                    Cancelar
-                  </Button>
+                      }}
+                    >
+                      Excluir
+                    </Button>
+                  )}
+                  {(selectedAppointment.status === 'Confirmado' || selectedAppointment.status === 'Pendente') && (
+                    <Button
+                      variant="secondary"
+                      className="flex-1 h-14 text-red-100 hover:text-red-400 border border-red-900/20"
+                      onClick={async () => {
+                        if (confirm('Cancelar este agendamento?')) {
+                          try {
+                            await updateAppointmentStatus(selectedAppointment.id, 'Cancelado');
+                            setSelectedAppointment(null);
+                            setToast({ message: "Agendamento cancelado", type: 'success' });
+                          } catch (err) {
+                            setToast({ message: "Erro ao cancelar agendamento", type: 'error' });
+                          }
+                        }
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
                 </div>
               </div>
             }
@@ -597,13 +644,33 @@ export default function Agenda() {
             onClose={() => {
               setIsAddModalOpen(false);
               setEditingAppointment(null);
-            }} 
+              // Sem limpar, "Adicionar" abria com os dados do agendamento
+              // cuja edição tinha sido cancelada.
+              setNewAppt({
+        clientId: '',
+        service: '',
+        time: '',
+        date: selectedFullDate,
+        duration: 60,
+        price: 0,
+        notes: ''
+      });
+            }}  
             title={editingAppointment ? "Editar Agendamento" : "Novo Agendamento"}
             footer={
               <div className="grid grid-cols-2 gap-3">
                 <Button variant="secondary" onClick={() => {
                   setIsAddModalOpen(false);
                   setEditingAppointment(null);
+                  setNewAppt({
+        clientId: '',
+        service: '',
+        time: '',
+        date: selectedFullDate,
+        duration: 60,
+        price: 0,
+        notes: ''
+      });
                 }}>
                   Cancelar
                 </Button>
@@ -727,7 +794,9 @@ export default function Agenda() {
 
               <div className="flex flex-col gap-3">
                  <Button className="h-14 bg-[#25D366] hover:bg-[#25D366]/90 border-none text-white" onClick={() => {
-                   openWhatsApp(whatsappPrompt.phone, whatsappPrompt.message);
+                   if (!openWhatsApp(whatsappPrompt.phone, whatsappPrompt.message)) {
+                     setToast({ message: 'Telefone inválido no cadastro. Corrija o número para enviar.', type: 'error' });
+                   }
                    setWhatsappPrompt(null);
                  }}>
                     <MessageCircle size={20} className="mr-2" />

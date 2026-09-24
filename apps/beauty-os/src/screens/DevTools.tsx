@@ -157,7 +157,12 @@ export default function DevTools({ onClose }: { onClose: () => void }) {
                   <Button 
                     variant="outline" 
                     className="justify-start border-white/5 hover:border-red-500/30 h-14"
-                    onClick={() => user && clearAllData(user.id)}
+                    onClick={() => {
+                      // Apagava toda a base da conta com um toque, sem pergunta.
+                      if (user && confirm('Apagar TODOS os clientes, agendamentos e lançamentos desta conta? Não dá para desfazer.')) {
+                        clearAllData(user.id);
+                      }
+                    }}
                   >
                     <Trash2 size={16} className="mr-3 text-red-500" />
                     <div className="text-left">

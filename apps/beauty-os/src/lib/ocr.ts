@@ -66,6 +66,46 @@ function parseAmount(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+const LINHA_DE_RESUMO = /^\s*(saldo|sdo|subtotal|total|limite)\b/i;
+
+/** Soma dias a uma data ISO, sem depender do fuso do aparelho. */
+function somarDias(iso: string, dias: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Onde está o valor monetário da linha: só os dígitos, sem sinal nem "R$".
+ * Prioriza formatos com centavos; inteiro simples só vale depois de "R$".
+ *
+ * Sem lookbehind de propósito: o Safari só suporta a partir do iOS 16.4, e
+ * num iPhone mais antigo a expressão lançava SyntaxError e derrubava a
+ * leitura inteira do extrato.
+ */
+function acharValor(rest: string): { texto: string; inicio: number } | null {
+  const padroes = [
+    /\d{1,3}(?:\.\d{3})+,\d{2}/,
+    /\d+,\d{2}/,
+    // Milhar sem centavos ("R$ 1.500"). Precisa vir antes do inteiro
+    // simples, senão aquele casa só o "1" e descarta o ".500".
+    /\d{1,3}(?:\.\d{3})+(?!\d)/,
+    /\d+\.\d{2}\b/,
+  ];
+  for (const re of padroes) {
+    const m = rest.match(re);
+    if (m && m.index !== undefined) return { texto: m[0], inicio: m.index };
+  }
+  const inteiro = rest.match(/R\$\s*-?(\d+)(?!\d)/);
+  if (inteiro && inteiro.index !== undefined) {
+    return { texto: inteiro[1], inicio: inteiro.index + inteiro[0].length - inteiro[1].length };
+  }
+  return null;
+}
+
+const TIPOS_RECEITA = ['revenue', 'receita', 'entrada', 'credito', 'crédito', 'income'];
+const TIPOS_DESPESA = ['expense', 'despesa', 'saida', 'saída', 'debito', 'débito'];
+
 /** Rejeita data que não existe no calendário: 31/02, 00/08, ano truncado. */
 function ehDataReal(iso: string): boolean {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -95,7 +135,14 @@ function extractDate(line: string, fallbackISO: string): { iso: string; rest: st
       ? fallbackISO.slice(0, 4)
       : ano.length === 2 ? `20${ano}` : ano;
 
-    const iso = `${year}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+    let iso = `${year}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+    // Sem ano no extrato, uma data muito à frente de hoje é do ano anterior:
+    // "28/12" lido em janeiro virava dezembro do ano seguinte. Só a partir de
+    // dois meses — lançamento agendado para daqui a dias ("PIX AGENDADO
+    // 25/09") fica no ano corrente.
+    if (ano === undefined && iso > somarDias(fallbackISO, 60)) {
+      iso = `${Number(year) - 1}${iso.slice(4)}`;
+    }
     if (ehDataReal(iso)) {
       return { iso, rest: line.replace(trecho, ' ') };
     }
@@ -133,25 +180,30 @@ export function parseStatementText(text: string, todayISO: string): ParsedTransa
 
     const { iso, rest } = extractDate(line, todayISO);
 
-    // Valor monetário: prioriza formatos com centavos, aceita inteiro com R$
-    const moneyMatch =
-      rest.match(/([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})+,\d{2})/) ||
-      rest.match(/([+-]?\s*R?\$?\s*\d+,\d{2})/) ||
-      // Milhar sem centavos ("R$ 1.500"). Precisa vir antes do padrão de
-      // inteiro simples, senão aquele casa só o "1" e descarta o ".500".
-      rest.match(/([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})+(?!\d))/) ||
-      rest.match(/([+-]?\s*R?\$?\s*\d+\.\d{2})\b/) ||
-      rest.match(/([+-]?\s*R\$\s*\d+(?!\d))/);
+    // Saldo, total e limite descrevem a conta, não movimentam dinheiro. Todo
+    // extrato tem "SALDO ANTERIOR 1.234,56"; sem esta regra a linha entrava
+    // como despesa já marcada para importar. Só quando a palavra abre a
+    // linha: no meio da descrição são lançamentos reais ("TRANSF SALDO
+    // C/SAL", "POSTO TOTAL", "JUROS LIMITE DA CONTA").
+    if (LINHA_DE_RESUMO.test(rest)) continue;
 
-    if (!moneyMatch) continue;
+    // Só o número; sinal e "R$" são lidos à parte. O padrão antigo aceitava
+    // um "R" solto antes dos dígitos e comia a última letra da descrição
+    // ("FORNECEDOR 50,00" virava "FORNECEDO"), e tratava qualquer hífen
+    // antes do valor como sinal, então "Venda - R$ 50,00" virava despesa.
+    const nucleo = acharValor(rest);
+    if (!nucleo) continue;
 
-    const token = moneyMatch[1];
-    const isNegative = /^\s*-/.test(token);
-    const amount = parseAmount(token.replace(/^[+-]/, ''));
+    const amount = parseAmount(nucleo.texto);
     if (amount === null || amount === 0) continue;
 
-    const description = rest
-      .replace(token, ' ')
+    const antes = rest.slice(0, nucleo.inicio);
+    const depois = rest.slice(nucleo.inicio + nucleo.texto.length);
+    // Sinal só quando colado: "-2.000,00", "-R$ 50,00", "R$ -50,00".
+    // Hífen seguido de espaço é separador de descrição.
+    const isNegative = /(?:^|\s)-(?:R\$\s*)?$/.test(antes) || /R\$\s*-$/.test(antes);
+
+    const description = `${antes.replace(/\s*[-+]?\s*(?:R\$)?\s*-?\s*$/, '')} ${depois}`
       .replace(/\s{2,}/g, ' ')
       .replace(/^[\s\-–—.:|]+|[\s\-–—.:|]+$/g, '')
       .trim();
@@ -170,6 +222,44 @@ export function parseStatementText(text: string, todayISO: string): ParsedTransa
   }
 
   return transactions;
+}
+
+/**
+ * Confere a resposta da IA antes de ela chegar à tela de revisão.
+ *
+ * O JSON do Gemini ia direto para a importação. Valor vindo como texto
+ * ("250,00") virava NaN e a gravação falhava; negativo aparecia com sinal
+ * trocado; tipo "saida" ou data "31/02/2026" iam para o banco e eram
+ * recusados. Aqui cada item é normalizado ou descartado.
+ */
+export function sanitizarTransacoes(raw: unknown, todayISO: string): ParsedTransaction[] {
+  if (!Array.isArray(raw)) return [];
+
+  const saida: ParsedTransaction[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const r = item as Record<string, unknown>;
+
+    const valor = typeof r.amount === 'number' ? r.amount : parseAmount(String(r.amount ?? ''));
+    if (valor === null || !Number.isFinite(valor) || valor === 0) continue;
+
+    const description = String(r.description ?? '').trim().slice(0, 120);
+    if (!description) continue;
+
+    const tipoBruto = String(r.type ?? '').trim().toLowerCase();
+    const type: 'revenue' | 'expense' =
+      TIPOS_RECEITA.includes(tipoBruto) ? 'revenue'
+      : TIPOS_DESPESA.includes(tipoBruto) ? 'expense'
+      : detectType(description, valor < 0);
+
+    const dataBruta = typeof r.date === 'string' ? r.date.trim() : '';
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(dataBruta) && ehDataReal(dataBruta) ? dataBruta : todayISO;
+
+    const category = String(r.category ?? '').trim().slice(0, 60) || detectCategory(description, type);
+
+    saida.push({ date, description, amount: Math.abs(valor), type, category });
+  }
+  return saida;
 }
 
 /**
