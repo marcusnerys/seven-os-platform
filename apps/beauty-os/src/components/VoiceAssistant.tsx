@@ -6,6 +6,22 @@ import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { useVoiceAssistant, VoiceCommandResult } from '../services/voiceService';
 
+// Onde o reconhecimento de voz do navegador funciona. No iPhone ele só
+// começa dentro de um toque do usuário, e no app instalado na tela inicial
+// ele não funciona de jeito nenhum — o iOS não libera a API nesse modo. Era
+// o caso em produção: o assistente abria, buscava a rotina do dia, mas
+// nenhuma fala chegava ao servidor.
+const ReconhecimentoDeVoz: any = typeof window !== 'undefined'
+  ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+  : undefined;
+const EH_IOS = typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const APP_INSTALADO = typeof window !== 'undefined' &&
+  (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true);
+const VOZ_DISPONIVEL = !!ReconhecimentoDeVoz && !(EH_IOS && APP_INSTALADO);
+// Começar a ouvir sozinho ao abrir só onde não exige toque (fora do iPhone).
+const INICIAR_SOZINHO = VOZ_DISPONIVEL && !EH_IOS;
+
 export function VoiceAssistant() {
   const isVoiceActive = useStore(state => state.isVoiceActive);
   const setIsVoiceActive = useStore(state => state.setIsVoiceActive);
@@ -19,6 +35,10 @@ export function VoiceAssistant() {
   const [routineInsight, setRoutineInsight] = useState<string | null>(null);
   const [isLoadingInsight, setIsLoadingInsight] = useState(false);
   const recognitionRef = React.useRef<any>(null);
+  // Campo de texto: funciona em qualquer aparelho, e no iPhone o microfone
+  // do próprio teclado dita o comando mesmo no app instalado.
+  const campoRef = React.useRef<HTMLInputElement>(null);
+  const [digitado, setDigitado] = useState('');
   // Cada comando ganha um número. Fechar o assistente avança o contador, e
   // tudo que chega de um comando antigo é descartado. Um booleano de
   // "cancelado" não bastava: reabrir o assistente o zerava, e a resposta do
@@ -67,7 +87,7 @@ export function VoiceAssistant() {
 
   useEffect(() => {
     if (!isVoiceActive) setPausado(false);
-    if (isVoiceActive && !isListening && !isProcessing && !pausado) {
+    if (isVoiceActive && INICIAR_SOZINHO && !isListening && !isProcessing && !pausado) {
       startListening();
     }
   }, [isVoiceActive, isProcessing, pausado]);
@@ -86,12 +106,12 @@ export function VoiceAssistant() {
   }, [isVoiceActive]);
 
   const startListening = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      // Fechava sem dizer nada. No Firefox e em alguns navegadores de
-      // celular a pessoa tocava no microfone e a tela simplesmente sumia.
-      useStore.getState().setToast({ message: 'Este navegador não reconhece voz. Use o Chrome para falar com o assistente.', type: 'error' });
-      setIsVoiceActive(false);
+    const SpeechRecognition = ReconhecimentoDeVoz;
+    // Sem reconhecimento aqui (app instalado no iPhone, Firefox), o assistente
+    // não fecha mais: vai para o campo de texto, onde o microfone do teclado
+    // também dita o comando.
+    if (!VOZ_DISPONIVEL) {
+      campoRef.current?.focus();
       return;
     }
     setPausado(false);
@@ -125,6 +145,15 @@ export function VoiceAssistant() {
       };
       if (event?.error === 'aborted') return;
       setPausado(true);
+      if (EH_IOS && (event?.error === 'not-allowed' || event?.error === 'service-not-allowed')) {
+        setResult({
+          action: 'unknown',
+          message: 'O iPhone não liberou o microfone aqui. Digite o comando ou use o microfone do teclado.',
+          status: 'complete',
+        });
+        campoRef.current?.focus();
+        return;
+      }
       setResult({
         action: 'unknown',
         message: recados[event?.error] ?? 'Não consegui ouvir. Toque no microfone para tentar de novo.',
@@ -287,7 +316,10 @@ export function VoiceAssistant() {
               transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
               // Depois de um silêncio ou erro não havia como tentar de novo
               // sem fechar e reabrir o assistente.
-              onClick={() => { if (!isListening && !isProcessing) startListening(); }}
+              onClick={() => {
+                if (!VOZ_DISPONIVEL) { campoRef.current?.focus(); return; }
+                if (!isListening && !isProcessing) startListening();
+              }}
               role="button"
               aria-label="Falar de novo"
               className={cn(
@@ -320,7 +352,11 @@ export function VoiceAssistant() {
 
             <div className="flex flex-col gap-6 max-w-sm w-full">
               <h2 className="text-[24px] font-bold text-white tracking-tight leading-tight">
-                {isProcessing ? 'Processando...' : (isListening ? 'Como posso ajudar?' : 'Toque no microfone para falar')}
+                {isProcessing
+                  ? 'Processando...'
+                  : isListening
+                    ? 'Como posso ajudar?'
+                    : VOZ_DISPONIVEL ? 'Toque no microfone para falar' : 'Digite ou dite pelo teclado'}
               </h2>
 
               <div className="min-h-[100px] p-6 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-md flex flex-col items-center justify-center gap-3">
@@ -332,7 +368,11 @@ export function VoiceAssistant() {
                       animate={{ opacity: 1 }}
                       className="text-[18px] font-medium text-white/80"
                     >
-                      {interim || transcript || 'Estou ouvindo...'}
+                      {interim || transcript || (isListening
+                        ? 'Estou ouvindo...'
+                        : VOZ_DISPONIVEL
+                          ? 'Toque no microfone ou digite abaixo'
+                          : 'No app instalado do iPhone, toque no microfone do teclado para ditar')}
                     </motion.p>
                   ) : (
                     <motion.div
@@ -357,6 +397,36 @@ export function VoiceAssistant() {
                   )}
                 </AnimatePresence>
               </div>
+
+              <form
+                className="flex gap-2"
+                onSubmit={e => {
+                  e.preventDefault();
+                  const texto = digitado.trim();
+                  if (!texto || isProcessing) return;
+                  recognitionRef.current?.abort?.();
+                  setDigitado('');
+                  setTranscript(texto);
+                  handleFinalTranscript(texto);
+                }}
+              >
+                <input
+                  ref={campoRef}
+                  value={digitado}
+                  onChange={e => setDigitado(e.target.value)}
+                  placeholder="Ou digite o comando..."
+                  enterKeyHint="send"
+                  aria-label="Comando para o assistente"
+                  className="flex-1 min-w-0 h-12 px-4 rounded-2xl bg-white/5 border border-white/10 text-white text-[16px] placeholder:text-white/30 focus:outline-none focus:border-ios-gold/40"
+                />
+                <button
+                  type="submit"
+                  disabled={!digitado.trim() || isProcessing}
+                  className="h-12 px-4 rounded-2xl bg-ios-gold text-ios-bg font-bold text-[14px] disabled:opacity-40"
+                >
+                  Enviar
+                </button>
+              </form>
 
               {/* Routine Insight Card */}
               {(routineInsight || isLoadingInsight) && !isProcessing && !result && (

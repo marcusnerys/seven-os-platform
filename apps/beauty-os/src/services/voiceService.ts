@@ -9,7 +9,9 @@ import { openWhatsApp } from '../lib/whatsapp';
  * para sempre: o catch nunca dispara, a resposta alternativa nunca aparece, e
  * o assistente fica girando na tela do usuário sem nunca desistir.
  */
-const TEMPO_LIMITE_MS = 15_000;
+// O servidor leva de 6 a 10 s por comando no nível gratuito do Gemini, e
+// repete em caso de fila cheia. Com 15 s o app desistia antes da resposta.
+const TEMPO_LIMITE_MS = 30_000;
 
 async function fetchComPrazo(url: string, init: RequestInit): Promise<Response> {
   const controle = new AbortController();
