@@ -81,6 +81,9 @@ export function Button({ children, className, variant = 'primary', loading, disa
 }
 
 export function Toast({ message, type = 'success', isVisible, onClose }: { message: string, type?: 'success' | 'error', isVisible: boolean, onClose: () => void }) {
+  // Com o assistente de voz aberto, o aviso sobe para o topo: embaixo ele
+  // cobria o cartão de resultado da folha do assistente.
+  const vozAberta = useStore(state => state.isVoiceActive);
   React.useEffect(() => {
     if (isVisible) {
       const timer = setTimeout(onClose, 3000);
@@ -92,10 +95,13 @@ export function Toast({ message, type = 'success', isVisible, onClose }: { messa
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          initial={{ opacity: 0, y: vozAberta ? -30 : 50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 20, scale: 0.9 }}
-          className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[110] w-max max-w-[90vw]"
+          exit={{ opacity: 0, y: vozAberta ? -20 : 20, scale: 0.9 }}
+          className={cn(
+            "fixed left-1/2 -translate-x-1/2 z-[120] w-max max-w-[90vw]",
+            vozAberta ? "top-[calc(env(safe-area-inset-top)+12px)]" : "bottom-32"
+          )}
         >
           <div className="px-5 py-3 rounded-2xl bg-[#1C1C1E]/95 backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-3">
             <div className={cn("w-2 h-2 rounded-full", type === 'success' ? "bg-ios-cyan shadow-[0_0_8px_#00E6FF]" : "bg-red-500 shadow-[0_0_8px_#ef4444]")} />
