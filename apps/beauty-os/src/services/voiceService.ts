@@ -165,7 +165,6 @@ export function useVoiceAssistant() {
           price: serviceTemplate ? serviceTemplate.price : 0,
           status: 'Confirmado'
         });
-        store.setActiveTab('agenda');
         if (service && !serviceTemplate) {
           return informar(`Agendado. "${service}" não está no catálogo, então ficou sem preço. Ajuste na Agenda se precisar.`);
         }
@@ -196,7 +195,6 @@ export function useVoiceAssistant() {
         }
 
         await store.updateAppointmentStatus(candidatos[0].id, 'Cancelado');
-        store.setActiveTab('agenda');
         return null;
       }
 
@@ -212,7 +210,6 @@ export function useVoiceAssistant() {
           isVIP: false,
           isFavorite: false
         });
-        store.setActiveTab('clients');
         return telefone ? null : informar(`${name} cadastrado sem telefone. Complete o número no cadastro para mandar mensagens.`);
       }
 
@@ -231,7 +228,6 @@ export function useVoiceAssistant() {
           date: dataValida(data.date) ? data.date : hoje,
           description: description || (receita ? 'Registrado por voz' : 'Despesa registrada por voz')
         });
-        store.setActiveTab('financial');
         return null;
       }
 
@@ -241,7 +237,6 @@ export function useVoiceAssistant() {
         const { cliente, aviso } = acharCliente(clientName);
         if (!cliente) return aviso;
         await store.updateClient(cliente.id, { isVIP: isVIP !== false });
-        store.setActiveTab('clients');
         return informar(`${cliente.name} agora ${isVIP !== false ? 'é VIP' : 'não é mais VIP'}.`);
       }
 
@@ -260,7 +255,6 @@ export function useVoiceAssistant() {
           price: preco,
           duration: Number(duration) || 60
         });
-        store.setActiveTab('more');
         return null;
       }
 
@@ -288,14 +282,12 @@ export function useVoiceAssistant() {
         const monthExpenses = store.transactions
           .filter(t => t.type === 'expense' && t.date >= monthStart)
           .reduce((sum, t) => sum + t.amount, 0);
-        store.setActiveTab('financial');
         return informar(`Este mês: receitas R$ ${reais(monthRevenue)}, despesas R$ ${reais(monthExpenses)}, resultado R$ ${reais(monthRevenue - monthExpenses)}.`);
       }
 
       case 'list_inactive_clients': {
         const thirtyDaysAgo = dataLocal(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
         const inactive = store.clients.filter(c => c.lastVisit && c.lastVisit < thirtyDaysAgo);
-        store.setActiveTab('clients');
         return informar(inactive.length > 0
           ? `${inactive.length} sem visita há mais de 30 dias: ${inactive.slice(0, 3).map(c => c.name).join(', ')}${inactive.length > 3 ? '...' : ''}`
           : 'Ninguém está há mais de 30 dias sem visita.');
@@ -309,7 +301,6 @@ export function useVoiceAssistant() {
         await store.updateClient(cliente.id, {
           notes: cliente.notes ? `${cliente.notes}\n---\n${notes}` : notes
         });
-        store.setActiveTab('clients');
         return informar(`Anotado no cadastro de ${cliente.name}.`);
       }
 

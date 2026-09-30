@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 /**
  * Servidor do assistente de voz.
@@ -23,6 +23,7 @@ interface Req {
 interface Res {
   status(codigo: number): Res;
   json(corpo: unknown): void;
+  setHeader(nome: string, valor: string): void;
 }
 
 /**
@@ -34,9 +35,26 @@ interface Res {
  * gratuito ele responde 503 em horário cheio, medido aqui. Com dois, uma
  * saturação passageira do primeiro não derruba o recurso.
  */
-const MODELOS = ["gemini-flash-latest", "gemini-3-flash-preview"];
+//
+// Velocidade: cada comando levava 9 s em média e até 26 s, medido em
+// produção. O Flash pensa no nível médio por padrão, e o reserva
+// (gemini-3-flash-preview) no alto — para classificar uma frase curta isso só
+// atrasa. O principal agora pensa no nível baixo, e o reserva é o Flash-Lite:
+// outra fila de capacidade, e já pensa no mínimo por padrão.
+type Modelo = { nome: string; pensamento?: ThinkingLevel };
+const MODELOS: Modelo[] = [
+  { nome: "gemini-flash-latest", pensamento: ThinkingLevel.LOW },
+  { nome: "gemini-flash-lite-latest" },
+];
 
-const ESPERAS_MS = [800, 2000];
+// Espera antes de cada rodada pelos modelos. Com fila cheia num deles, o
+// outro é tentado na hora; só depois de os dois falharem é que se espera.
+const ESPERAS_MS = [0, 1000];
+
+// Prazo de cada tentativa. Uma chamada empacada passa para o próximo modelo
+// em vez de segurar a pessoa até o limite da função: quatro tentativas de
+// 6 s mais a espera cabem nos 30 s.
+const PRAZO_TENTATIVA_MS = 6000;
 const ehPassageiro = (erro: unknown) => {
   const status = (erro as { status?: number })?.status;
   return status === 429 || status === 503;
@@ -48,19 +66,21 @@ const ehPassageiro = (erro: unknown) => {
  * continua indisponível. Uma tentativa só transformava um tropeço de
  * segundos em erro na tela.
  */
-async function comRepeticao<T>(chamada: (modelo: string) => Promise<T>): Promise<T> {
+async function comRepeticao<T>(
+  chamada: (modelo: Modelo, sinal: AbortSignal) => Promise<T>,
+): Promise<{ resposta: T; modelo: string }> {
   let ultimoErro: unknown;
 
-  for (const modelo of MODELOS) {
-    for (let tentativa = 0; tentativa <= ESPERAS_MS.length; tentativa++) {
+  for (const espera of ESPERAS_MS) {
+    if (espera) await new Promise(r => setTimeout(r, espera));
+    for (const modelo of MODELOS) {
+      const sinal = AbortSignal.timeout(PRAZO_TENTATIVA_MS);
       try {
-        return await chamada(modelo);
+        return { resposta: await chamada(modelo, sinal), modelo: modelo.nome };
       } catch (erro) {
-        ultimoErro = erro;
-        if (!ehPassageiro(erro)) throw erro;
-        if (tentativa < ESPERAS_MS.length) {
-          await new Promise(r => setTimeout(r, ESPERAS_MS[tentativa]));
-        }
+        // Prazo estourado conta como indisponível: a tela diz "ocupado".
+        ultimoErro = sinal.aborted ? { status: 503 } : erro;
+        if (!sinal.aborted && !ehPassageiro(erro)) throw erro;
       }
     }
   }
@@ -103,30 +123,36 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(401).json({ error: 'Entre no app para usar o assistente.' });
     return;
   }
-  const quem = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnon },
-  });
+  // Login e contagem de uso ao mesmo tempo: em sequência eram duas idas ao
+  // banco uma depois da outra antes de a IA começar.
+  const inicio = Date.now();
+  const [quem, uso] = await Promise.all([
+    fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnon },
+    }),
+    // Login sozinho não protege a cota: criar conta é livre, e uma conta
+    // descartável em loop esgotava o Gemini de todos os negócios. O uso é
+    // contado por pessoa e por hora no banco (migration 0016). Se a contagem
+    // falhar por rede, deixa passar — é proteção contra abuso, não cobrança.
+    fetch(`${supabaseUrl}/rest/v1/rpc/beautyos_registrar_uso_ia`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnon, 'Content-Type': 'application/json' },
+      body: '{}',
+    }).then(r => (r.ok ? r.json() : true)).catch(() => true),
+  ]);
+  const msLogin = Date.now() - inicio;
   if (!quem.ok) {
     res.status(401).json({ error: 'Sessão expirada. Entre de novo.' });
     return;
   }
 
-  // Login sozinho não protege a cota: criar conta é livre, e uma conta
-  // descartável em loop esgotava o Gemini de todos os negócios. O uso é
-  // contado por pessoa e por hora no banco (migration 0016). Se a contagem
-  // falhar por rede, deixa passar — é proteção contra abuso, não cobrança.
-  const uso = await fetch(`${supabaseUrl}/rest/v1/rpc/beautyos_registrar_uso_ia`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, apikey: supabaseAnon, 'Content-Type': 'application/json' },
-    body: '{}',
-  }).then(r => (r.ok ? r.json() : true)).catch(() => true);
   if (uso === false) {
     res.status(429).json({ error: 'Você usou o assistente muitas vezes nesta hora. Tente de novo mais tarde.' });
     return;
   }
 
   const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-  const { mode, text, context, storeSnapshot } = corpo;
+  const { text, context } = corpo;
   if (typeof text === 'string' && text.length > 1000) {
     res.status(400).json({ error: 'Comando longo demais.' });
     return;
@@ -142,53 +168,14 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const ai = new GoogleGenAI({ apiKey });
     const todayString = hojeEmBrasilia();
 
-    // --- INSIGHT MODE: proactive routine briefing ---
-    if (mode === 'insight') {
-      const { todayAppointments = [], inactiveClients = [], recentRevenue = 0, recentExpenses = 0, totalClients = 0, hasScheduling = true } = storeSnapshot || {};
-
-      // Finanças pessoais: sem agenda nem clientes. O briefing sugeria agendar
-      // e cadastrar clientes para quem usa o app só para controlar gastos.
-      if (hasScheduling === false) {
-        const promptPessoal = `Você é a IA do Leshanot OS, usada aqui como controle de finanças pessoais (sem clientes nem agenda).
-Hoje é ${todayString}.
-- Receitas nos últimos 7 dias: R$ ${Number(recentRevenue).toFixed(2)}
-- Despesas nos últimos 7 dias: R$ ${Number(recentExpenses).toFixed(2)}
-
-TAREFA: Até 2 frases, em português do Brasil, calorosas e diretas, sobre como estão as finanças da semana. Termine sugerindo registrar um gasto, uma receita ou ver o resumo do mês. Não fale de clientes, agendamentos ou atendimentos.`;
-        const r = await comRepeticao(modelo => ai.models.generateContent({ model: modelo, contents: promptPessoal }));
-        res.status(200).json({ insight: r.text?.trim() || 'Olá! Como posso ajudar com suas finanças?' });
-        return;
-      }
-
-      const prompt = `Você é a IA operacional do Leshanot OS — um sistema de gestão para pequenos negócios (salões, oficinas, prestadores de serviço).
-Hoje é ${todayString}.
-
-DADOS DO NEGÓCIO HOJE:
-- Agendamentos de hoje: ${JSON.stringify(todayAppointments)}
-- Clientes sem visita há mais de 30 dias: ${inactiveClients.length} (nomes: ${inactiveClients.slice(0, 3).join(', ')}${inactiveClients.length > 3 ? '...' : ''})
-- Receita nos últimos 7 dias: R$ ${Number(recentRevenue).toFixed(2)}
-- Despesas nos últimos 7 dias: R$ ${Number(recentExpenses).toFixed(2)}
-- Total de clientes cadastrados: ${totalClients}
-
-TAREFA: Gere um briefing de boas-vindas personalizado e proativo. Seja direto, caloroso e útil. Use até 3 frases. Mencione os agendamentos do dia se houver, alerte sobre clientes inativos se relevante, e destaque o resultado financeiro se positivo. Termine com uma pergunta ou sugestão de ação concreta dentro do sistema (agendar, enviar mensagem, ver relatório). Responda em português do Brasil.`;
-
-      const response = await comRepeticao(modelo => ai.models.generateContent({
-        model: modelo,
-        contents: prompt,
-      }));
-
-      res.status(200).json({ insight: response.text?.trim() || 'Olá! Pronto para mais um dia produtivo.' });
-      return;
-    }
-
-    // --- COMMAND MODE: parse voice command ---
     if (!text) {
       res.status(400).json({ error: 'Text is required' });
       return;
     }
 
-    const response = await comRepeticao(modelo => ai.models.generateContent({
-      model: modelo,
+    const inicioIa = Date.now();
+    const { resposta: response, modelo } = await comRepeticao((modelo, sinal) => ai.models.generateContent({
+      model: modelo.nome,
       contents: `Você é o assistente operacional (AI) do Leshanot OS, um sistema de gestão para pequenos negócios: salões, oficinas, prestadores de serviço. Entenda o vocabulário de qualquer um deles ("troca de óleo", "revisão", "corte", "manicure").
 Comando: "${text}"
 Contexto: ${JSON.stringify(context || {})}
@@ -246,8 +233,11 @@ JSON:
         // formato do prompt e devolve o objeto certo de cada ação; a
         // conferência de campos obrigatórios logo abaixo é a rede.
         responseMimeType: "application/json",
+        ...(modelo.pensamento && { thinkingConfig: { thinkingLevel: modelo.pensamento } }),
+        abortSignal: sinal,
       },
     }));
+    const msIa = Date.now() - inicioIa;
 
     // O modelo às vezes embrulha o JSON em bloco de código.
     const limpo = (response.text || '{}')
@@ -296,6 +286,9 @@ JSON:
       resultado.message = `Faltou ${pedidos.join(' e ')}. Pode repetir incluindo isso?`;
     }
 
+    // Tempo de cada etapa, visível nas ferramentas do navegador: diz se a
+    // demora está no login ou na IA sem precisar abrir o log da Vercel.
+    res.setHeader('Server-Timing', `login;dur=${msLogin}, ia;dur=${msIa};desc="${modelo}"`);
     res.status(200).json(resultado);
   } catch (error) {
     console.error("Gemini Error:", error);
