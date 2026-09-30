@@ -37,23 +37,27 @@ interface Res {
  */
 //
 // Velocidade: cada comando levava 9 s em média e até 26 s, medido em
-// produção. O Flash pensa no nível médio por padrão, e o reserva
+// produção. O Flash pensa no nível médio por padrão, e o reserva de então
 // (gemini-3-flash-preview) no alto — para classificar uma frase curta isso só
-// atrasa. O principal agora pensa no nível baixo, e o reserva é o Flash-Lite:
-// outra fila de capacidade, e já pensa no mínimo por padrão.
+// atrasa. E a cota gratuita diária do Flash é pequena: depois de umas vinte
+// chamadas ele passa o resto do dia respondendo 429. O Flash-Lite pensa no
+// mínimo por padrão, acertou 9 de 10 comandos de teste (a décima foi prazo
+// estourado) e respondeu entre 0,9 e 4 s. Ele vai na frente; o Flash, no
+// nível baixo de pensamento, fica de reserva.
 type Modelo = { nome: string; pensamento?: ThinkingLevel };
 const MODELOS: Modelo[] = [
-  { nome: "gemini-flash-latest", pensamento: ThinkingLevel.LOW },
   { nome: "gemini-flash-lite-latest" },
+  { nome: "gemini-flash-latest", pensamento: ThinkingLevel.LOW },
 ];
 
 // Espera antes de cada rodada pelos modelos. Com fila cheia num deles, o
 // outro é tentado na hora; só depois de os dois falharem é que se espera.
-const ESPERAS_MS = [0, 1000];
+// Uma chamada lenta do Flash-Lite costuma sair rápido na repetição.
+const ESPERAS_MS = [0, 500, 1000];
 
 // Prazo de cada tentativa. Uma chamada empacada passa para o próximo modelo
-// em vez de segurar a pessoa até o limite da função: quatro tentativas de
-// 6 s mais a espera cabem nos 30 s.
+// em vez de segurar a pessoa até o limite da função: seis tentativas cabem
+// nos 30 s porque o Flash sem cota responde 429 em 0,2 s.
 const PRAZO_TENTATIVA_MS = 6000;
 const ehPassageiro = (erro: unknown) => {
   const status = (erro as { status?: number })?.status;
@@ -68,6 +72,7 @@ const ehPassageiro = (erro: unknown) => {
  */
 async function comRepeticao<T>(
   chamada: (modelo: Modelo, sinal: AbortSignal) => Promise<T>,
+  tentativas: string[],
 ): Promise<{ resposta: T; modelo: string }> {
   let ultimoErro: unknown;
 
@@ -75,9 +80,14 @@ async function comRepeticao<T>(
     if (espera) await new Promise(r => setTimeout(r, espera));
     for (const modelo of MODELOS) {
       const sinal = AbortSignal.timeout(PRAZO_TENTATIVA_MS);
+      const inicio = Date.now();
       try {
-        return { resposta: await chamada(modelo, sinal), modelo: modelo.nome };
+        const resposta = await chamada(modelo, sinal);
+        tentativas.push(`${modelo.nome} ok ${Date.now() - inicio}ms`);
+        return { resposta, modelo: modelo.nome };
       } catch (erro) {
+        const motivo = sinal.aborted ? 'prazo' : String((erro as { status?: number })?.status ?? 'erro');
+        tentativas.push(`${modelo.nome} ${motivo} ${Date.now() - inicio}ms`);
         // Prazo estourado conta como indisponível: a tela diz "ocupado".
         ultimoErro = sinal.aborted ? { status: 503 } : erro;
         if (!sinal.aborted && !ehPassageiro(erro)) throw erro;
@@ -164,6 +174,9 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     return;
   }
 
+  // Cada tentativa (modelo, resultado, tempo) vai num cabeçalho da resposta:
+  // mostra onde a demora está sem precisar abrir o log da Vercel.
+  const tentativas: string[] = [];
   try {
     const ai = new GoogleGenAI({ apiKey });
     const todayString = hojeEmBrasilia();
@@ -236,7 +249,7 @@ JSON:
         ...(modelo.pensamento && { thinkingConfig: { thinkingLevel: modelo.pensamento } }),
         abortSignal: sinal,
       },
-    }));
+    }), tentativas);
     const msIa = Date.now() - inicioIa;
 
     // O modelo às vezes embrulha o JSON em bloco de código.
@@ -289,8 +302,10 @@ JSON:
     // Tempo de cada etapa, visível nas ferramentas do navegador: diz se a
     // demora está no login ou na IA sem precisar abrir o log da Vercel.
     res.setHeader('Server-Timing', `login;dur=${msLogin}, ia;dur=${msIa};desc="${modelo}"`);
+    res.setHeader('X-Voz-Tentativas', tentativas.join(', '));
     res.status(200).json(resultado);
   } catch (error) {
+    res.setHeader('X-Voz-Tentativas', tentativas.join(', '));
     console.error("Gemini Error:", error);
     // Fila cheia ou indisponibilidade do Gemini não é defeito daqui: devolve
     // 503 para o front cair na resposta alternativa em vez de mostrar erro.
