@@ -72,6 +72,8 @@ export interface Settings {
   location: string;
   currency: string;
   businessType: BusinessType;
+  /** Segredo do link de assinatura da agenda (migration 0017). */
+  agendaToken?: string;
 }
 
 export interface Notification {
@@ -207,6 +209,8 @@ interface AppStore {
   setLoading: (loading: boolean) => void;
 
   addClient: (client: Omit<Client, 'id' | 'spent' | 'visits' | 'lastVisit'>) => Promise<void>;
+  /** Vários de uma vez (importação de contatos). Devolve quantos entraram. */
+  addClients: (clientes: { name: string; phone: string; email: string }[]) => Promise<number>;
   updateClient: (id: string, updates: Partial<Client>) => Promise<void>;
   toggleFavorite: (id: string) => Promise<void>;
   deleteClient: (id: string) => Promise<void>;
@@ -234,6 +238,8 @@ interface AppStore {
   addAutomationLog: (logKey: string) => Promise<void>;
   updateUserAvatar: (arquivo: File) => Promise<void>;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
+  /** Novo segredo para o link da agenda: calendários com o link antigo param de atualizar. */
+  trocarLinkDaAgenda: () => Promise<void>;
 
   getRevenueData: () => { value: number }[];
   getExpenseData: () => { value: number }[];
@@ -366,7 +372,13 @@ export const useStore = create<AppStore>()(
             // "Refazer configuração inicial" de quem saiu para copiar algo.
             const primeiraLeitura = !get().configLoaded;
             set({
-              settings: { studioName: data.studio_name, location: data.location, currency: data.currency, businessType: (data.business_type ?? 'generic') as BusinessType },
+              settings: {
+                studioName: data.studio_name,
+                location: data.location,
+                currency: data.currency,
+                businessType: (data.business_type ?? 'generic') as BusinessType,
+                agendaToken: data.agenda_token ?? undefined,
+              },
               ...(primeiraLeitura && data.onboarded_at ? {
                 hasOnboarded: true,
                 hasChosenTheme: true,
@@ -858,6 +870,42 @@ export const useStore = create<AppStore>()(
           });
         },
 
+        // Um insert por lote, não um por contato: a agenda inteira de um
+        // iPhone passa de mil nomes, e um por um levava minutos.
+        addClients: async (clientes) => {
+          const user = get().user;
+          if (!user || clientes.length === 0) return 0;
+          const LOTE = 500;
+          let inseridos = 0;
+          try {
+            for (let i = 0; i < clientes.length; i += LOTE) {
+              const { error } = await supabase.from('beautyos_clients').insert(
+                clientes.slice(i, i + LOTE).map(c => ({
+                  empresa_id: user.id,
+                  name: c.name,
+                  email: c.email,
+                  phone: c.phone,
+                  tags: ['Importado'],
+                  notes: null,
+                  birth_date: null,
+                  spent: 0,
+                  visits: 0,
+                  last_visit: null,
+                  is_vip: false,
+                  is_favorite: false,
+                })),
+              );
+              if (error) throw error;
+              inseridos += Math.min(LOTE, clientes.length - i);
+            }
+          } catch (error) {
+            // Lotes anteriores podem ter entrado. Importar de novo é seguro:
+            // quem já está na lista é pulado.
+            handleSupabaseError(error, OperationType.CREATE, 'beautyos_clients');
+          }
+          return inseridos;
+        },
+
         addService: async (service) => {
           const user = get().user;
           if (!user) return;
@@ -958,6 +1006,19 @@ export const useStore = create<AppStore>()(
             if (erroSettings) throw erroSettings;
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, 'avatar');
+          }
+        },
+
+        trocarLinkDaAgenda: async () => {
+          const user = get().user;
+          if (!user) return;
+          const agendaToken = crypto.randomUUID();
+          try {
+            const { error } = await supabase.from('beautyos_settings').update({ agenda_token: agendaToken }).eq('empresa_id', user.id);
+            if (error) throw error;
+            set(s => ({ settings: { ...s.settings, agendaToken } }));
+          } catch (error) {
+            handleSupabaseError(error, OperationType.UPDATE, 'beautyos_settings/agenda_token');
           }
         },
 

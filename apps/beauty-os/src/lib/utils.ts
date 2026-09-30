@@ -200,3 +200,7 @@ export function acharPorNome<T extends { name: string }>(
   }
   return { item: null, ambiguo: false };
 }
+
+/** iPhone ou iPad (o iPad se apresenta como Mac, mas tem toque). */
+export const EH_IOS = typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));

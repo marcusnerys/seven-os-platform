@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Mic, X, Loader2, Keyboard, Check, AlertCircle, HelpCircle } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, EH_IOS } from '../lib/utils';
 import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { useVoiceAssistant, VoiceCommandResult } from '../services/voiceService';
@@ -14,8 +14,6 @@ import { useVoiceAssistant, VoiceCommandResult } from '../services/voiceService'
 const ReconhecimentoDeVoz: any = typeof window !== 'undefined'
   ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
   : undefined;
-const EH_IOS = typeof navigator !== 'undefined' &&
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 const APP_INSTALADO = typeof window !== 'undefined' &&
   (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true);
 const VOZ_DISPONIVEL = !!ReconhecimentoDeVoz && !(EH_IOS && APP_INSTALADO);
