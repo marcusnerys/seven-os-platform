@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { dataLocal, acharPorNome, semAcento, digitosTelefoneBR, formatarTelefoneBR } from '../lib/utils';
 import { openWhatsApp } from '../lib/whatsapp';
 
+const reais = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 /**
  * fetch com prazo. Sem isto, um servidor que trava deixa o `await` pendurado
  * para sempre: o catch nunca dispara, a resposta alternativa nunca aparece, e
@@ -39,58 +41,6 @@ export interface VoiceCommandResult {
 export type ResultadoExecucao = { mensagem: string; pergunta: boolean } | null;
 
 export function useVoiceAssistant() {
-  const getRoutineInsight = async (): Promise<string> => {
-    const store = useStore.getState();
-    const today = dataLocal();
-    const sevenDaysAgo = dataLocal(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
-    const thirtyDaysAgo = dataLocal(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-
-    const todayAppointments = store.appointments
-      .filter(a => a.date === today && a.status !== 'Cancelado')
-      .map(a => ({ name: a.clientName, time: a.time, service: a.service }));
-
-    const inactiveClients = store.clients
-      .filter(c => c.lastVisit && c.lastVisit < thirtyDaysAgo)
-      .map(c => c.name);
-
-    const recentRevenue = store.transactions
-      .filter(t => t.type === 'revenue' && t.date >= sevenDaysAgo)
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const recentExpenses = store.transactions
-      .filter(t => t.type === 'expense' && t.date >= sevenDaysAgo)
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    try {
-      const response = await fetchComPrazo('/api/voice/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'insight',
-          storeSnapshot: {
-            todayAppointments,
-            inactiveClients,
-            recentRevenue,
-            recentExpenses,
-            totalClients: store.clients.length,
-            hasScheduling: getVertical(store.settings.businessType).hasScheduling,
-          },
-        }),
-      });
-
-      if (!response.ok) throw new Error('API failed');
-      const data = await response.json();
-      return data.insight || 'Tudo pronto para o dia. Como posso ajudar?';
-    } catch {
-      if (todayAppointments.length > 0) {
-        return `Você tem ${todayAppointments.length} agendamento${todayAppointments.length > 1 ? 's' : ''} hoje. Como posso ajudar?`;
-      }
-      return getVertical(store.settings.businessType).hasScheduling
-        ? 'Olá! Agenda livre hoje. Como posso ajudar?'
-        : 'Olá! Como posso ajudar com suas finanças?';
-    }
-  };
-
   const parseCommand = async (text: string): Promise<VoiceCommandResult> => {
     const store = useStore.getState();
     try {
@@ -319,7 +269,7 @@ export function useVoiceAssistant() {
         const revenue = store.transactions
           .filter(t => t.date === hoje && t.type === 'revenue')
           .reduce((sum, t) => sum + t.amount, 0);
-        return informar(`Hoje: ${todayAppts.length} agendamento${todayAppts.length === 1 ? '' : 's'}. Total em vendas: R$ ${revenue.toFixed(2)}.`);
+        return informar(`Hoje: ${todayAppts.length} agendamento${todayAppts.length === 1 ? '' : 's'}. Total em vendas: R$ ${reais(revenue)}.`);
       }
 
       case 'show_dashboard_summary':
@@ -339,7 +289,7 @@ export function useVoiceAssistant() {
           .filter(t => t.type === 'expense' && t.date >= monthStart)
           .reduce((sum, t) => sum + t.amount, 0);
         store.setActiveTab('financial');
-        return informar(`Este mês: receitas R$ ${monthRevenue.toFixed(2)}, despesas R$ ${monthExpenses.toFixed(2)}, resultado R$ ${(monthRevenue - monthExpenses).toFixed(2)}.`);
+        return informar(`Este mês: receitas R$ ${reais(monthRevenue)}, despesas R$ ${reais(monthExpenses)}, resultado R$ ${reais(monthRevenue - monthExpenses)}.`);
       }
 
       case 'list_inactive_clients': {
@@ -380,5 +330,5 @@ export function useVoiceAssistant() {
     }
   };
 
-  return { parseCommand, executeCommand, getRoutineInsight };
+  return { parseCommand, executeCommand };
 }
