@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Mic, X, Loader2, Keyboard, Check, AlertCircle, HelpCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/store';
@@ -212,7 +212,15 @@ export function VoiceAssistant() {
   const stopAssistant = () => {
     geracaoRef.current++;
     clearTimeout(fechamentoRef.current);
-    recognitionRef.current?.stop();
+    // abort, não stop: stop() entrega o resultado final do que já foi ouvido,
+    // e o comando falado era executado depois de a pessoa fechar para
+    // desistir dele. Soltar os handlers garante que nada chega depois.
+    const reconhecimento = recognitionRef.current;
+    if (reconhecimento) {
+      reconhecimento.onresult = null;
+      reconhecimento.onerror = null;
+      reconhecimento.abort?.();
+    }
     setIsVoiceActive(false);
     setIsListening(false);
     setIsProcessing(false);
@@ -283,6 +291,9 @@ export function VoiceAssistant() {
     };
   }, [isVoiceActive]);
 
+  // Arrastar a alça para baixo fecha, como nas folhas do sistema.
+  const arrasto = useDragControls();
+
   // Esc fecha, como qualquer janela sobreposta.
   useEffect(() => {
     if (!isVoiceActive) return;
@@ -303,7 +314,9 @@ export function VoiceAssistant() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={stopAssistant}
+            // Tocar fora fecha, mas não no meio de um comando: cancelaria sem
+            // aviso algo que talvez já tenha sido gravado.
+            onClick={() => { if (!isProcessing) stopAssistant(); }}
             className="absolute inset-0 bg-black/40"
           />
           <motion.div
@@ -314,16 +327,32 @@ export function VoiceAssistant() {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 340 }}
+            drag="y"
+            dragControls={arrasto}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => { if (info.offset.y > 80 || info.velocity.y > 500) stopAssistant(); }}
             style={{
               bottom: teclado.baixo,
-              maxHeight: teclado.altura ? Math.min(teclado.altura - 24, teclado.altura * 0.85) : undefined,
+              maxHeight: teclado.altura ? Math.max(0, Math.min(teclado.altura - 24, teclado.altura * 0.85)) : undefined,
             }}
-            className="absolute inset-x-0 bottom-0 max-h-[85dvh] flex flex-col rounded-t-[28px] bg-ios-surface border-t border-ios-border shadow-[0_-12px_40px_rgba(0,0,0,0.35)] overscroll-contain"
+            className="absolute inset-x-0 bottom-0 max-h-[85dvh] flex flex-col rounded-t-[28px] bg-ios-surface border-t border-ios-border shadow-[0_-12px_40px_rgba(0,0,0,0.35)]"
           >
-            <div aria-hidden className="shrink-0 mx-auto mt-2.5 h-1 w-10 rounded-full bg-ios-text-secondary/30" />
+            <div
+              aria-hidden
+              onPointerDown={e => arrasto.start(e)}
+              className="shrink-0 h-6 flex items-center justify-center touch-none cursor-grab"
+            >
+              <div className="h-1 w-10 rounded-full bg-ios-text-secondary/30" />
+            </div>
+
+            {/* Tudo abaixo da alça rola junto: numa tela baixa (celular
+                deitado, teclado aberto) o campo continua alcançável. */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] flex flex-col gap-4">
 
             {/* Microfone, estado e fechar na mesma linha: a folha fica baixa. */}
-            <div className="shrink-0 flex items-center gap-4 px-5 pt-3 pb-4">
+            <div className="shrink-0 flex items-center gap-4 pt-1">
               <button
                 onClick={tocarMicrofone}
                 aria-label={isListening ? 'Parar de ouvir' : VOZ_DISPONIVEL ? 'Falar' : 'Digitar comando'}
@@ -361,8 +390,6 @@ export function VoiceAssistant() {
                 <X size={20} />
               </button>
             </div>
-
-            <div className="flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] flex flex-col gap-4">
               <AnimatePresence mode="wait">
                 {result && (
                   <motion.div
@@ -377,7 +404,7 @@ export function VoiceAssistant() {
                       'self-start flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider',
                       tipoResultado === 'erro' && 'bg-red-600 text-white',
                       tipoResultado === 'pergunta' && 'bg-amber-400 text-[#111214]',
-                      tipoResultado === 'feito' && 'bg-emerald-600 text-white'
+                      tipoResultado === 'feito' && 'bg-emerald-700 text-white'
                     )}>
                       {tipoResultado === 'erro' && <><AlertCircle size={13} /> Não deu certo</>}
                       {tipoResultado === 'pergunta' && <><HelpCircle size={13} /> Falta um detalhe</>}
