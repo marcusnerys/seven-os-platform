@@ -82,6 +82,9 @@ export function Onboarding() {
   const [fotoEnviada, setFotoEnviada] = useState<File | null>(null);
   const [novoServico, setNovoServico] = useState({ nome: '', preco: '', duracao: 60 });
   const [salvandoServico, setSalvandoServico] = useState(false);
+  // Com a lista de contatos do arquivo aberta, "Começar a usar" descartaria
+  // a seleção sem importar.
+  const [revisandoContatos, setRevisandoContatos] = useState(false);
 
   const vertical = VERTICALS[businessType];
   const STEPS: readonly Step[] = vertical.hasScheduling ? PASSOS_COM_AGENDA : PASSOS_BASE;
@@ -458,7 +461,7 @@ export function Onboarding() {
                 <h2 className="text-[11px] font-bold uppercase tracking-widest px-1" style={{ color: textSecondary }}>
                   Contatos do celular
                 </h2>
-                <ImportarContatos />
+                <ImportarContatos aoRevisar={setRevisandoContatos} />
               </section>
               <section className="flex flex-col gap-3">
                 <h2 className="text-[11px] font-bold uppercase tracking-widest px-1" style={{ color: textSecondary }}>
@@ -485,11 +488,11 @@ export function Onboarding() {
         ) : (
           <button
             onClick={handleFinish}
-            disabled={saving}
+            disabled={saving || revisandoContatos}
             className="w-full h-14 rounded-2xl font-bold text-[16px] text-black transition-all active:scale-95 disabled:opacity-60"
             style={{ background: selectedAccent }}
           >
-            {saving ? 'Salvando...' : 'Começar a usar'}
+            {saving ? 'Salvando...' : revisandoContatos ? 'Importe ou cancele os contatos acima' : 'Começar a usar'}
           </button>
         )}
 

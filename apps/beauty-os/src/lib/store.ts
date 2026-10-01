@@ -5,7 +5,7 @@ import { supabase, OperationType, handleSupabaseError } from './supabase';
 import { logger } from './qa/logger';
 import { perfMonitor } from './qa/performance';
 import type { BusinessType } from './vertical';
-import { dataLocal } from './utils';
+import { dataLocal, novoUUID } from './utils';
 
 export type AppointmentStatus = 'Confirmado' | 'Pendente' | 'Cancelado' | 'Concluído';
 
@@ -393,23 +393,33 @@ export const useStore = create<AppStore>()(
           }
         });
 
+        // Uma rajada de mudanças vira uma leitura só. Cada evento recarregava
+        // a tabela inteira: importar 500 contatos eram 500 recargas da lista
+        // completa, travando a tela e gastando a cota gratuita do banco.
+        const emLote = (recarregar: () => void) => {
+          let espera: ReturnType<typeof setTimeout> | undefined;
+          return () => {
+            clearTimeout(espera);
+            espera = setTimeout(recarregar, 400);
+          };
+        };
         realtimeChannel = supabase
           .channel(`empresa-${empresaId}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_clients', filter: `empresa_id=eq.${empresaId}` },
-            () => fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => set({ clients: rows }), fromSnakeCaseClient))
+            emLote(() => fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => set({ clients: rows }), fromSnakeCaseClient)))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_appointments', filter: `empresa_id=eq.${empresaId}` },
-            () => fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => set({ appointments: rows }), fromSnakeCaseAppointment, 'time'))
+            emLote(() => fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => set({ appointments: rows }), fromSnakeCaseAppointment, 'time')))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_transactions', filter: `empresa_id=eq.${empresaId}` },
-            () => fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => set({ transactions: rows }), fromSnakeCaseTransaction, 'date'))
+            emLote(() => fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => set({ transactions: rows }), fromSnakeCaseTransaction, 'date')))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_notifications', filter: `empresa_id=eq.${empresaId}` },
-            () => fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em'))
+            emLote(() => fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em')))
           // Serviços e automações também precisam escutar: sem isto, cadastrar
           // ou apagar um serviço mostrava o toast de sucesso mas a lista não
           // mudava, e a pessoa repetia a operação achando que não tinha salvo.
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_services', filter: `empresa_id=eq.${empresaId}` },
-            () => fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => set({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service)))
+            emLote(() => fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => set({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service))))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_automation_templates', filter: `empresa_id=eq.${empresaId}` },
-            () => fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation))
+            emLote(() => fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation)))
           .subscribe();
       };
 
@@ -899,9 +909,10 @@ export const useStore = create<AppStore>()(
               inseridos += Math.min(LOTE, clientes.length - i);
             }
           } catch (error) {
-            // Lotes anteriores podem ter entrado. Importar de novo é seguro:
-            // quem já está na lista é pulado.
-            handleSupabaseError(error, OperationType.CREATE, 'beautyos_clients');
+            console.error('Importação de contatos:', error);
+            // Lotes anteriores já entraram. Quem chama tira esses da lista
+            // antes de tentar de novo; reenviar tudo gravaria cada um duas vezes.
+            throw Object.assign(new Error('Falha ao importar contatos'), { inseridos });
           }
           return inseridos;
         },
@@ -1012,7 +1023,7 @@ export const useStore = create<AppStore>()(
         trocarLinkDaAgenda: async () => {
           const user = get().user;
           if (!user) return;
-          const agendaToken = crypto.randomUUID();
+          const agendaToken = novoUUID();
           try {
             const { error } = await supabase.from('beautyos_settings').update({ agenda_token: agendaToken }).eq('empresa_id', user.id);
             if (error) throw error;

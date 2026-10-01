@@ -32,9 +32,18 @@ export type LinhaDaAgenda = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Escapa texto para o iCalendar (RFC 5545 §3.3.11). */
+/**
+ * Escapa texto para o iCalendar (RFC 5545 §3.3.11). Nome e observação vêm
+ * também da reserva pública: um CR solto ou outro caractere de controle
+ * quebraria a linha e o calendário recusaria o arquivo inteiro.
+ */
 function escapar(valor: string): string {
-  return valor.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  return valor
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r\n|\r|\n/g, '\\n');
 }
 
 /**
@@ -126,7 +135,11 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     return;
   }
 
-  const linhas = (await resposta.json()) as LinhaDaAgenda[];
+  const linhas = (await resposta.json().catch(() => null)) as LinhaDaAgenda[] | null;
+  if (!Array.isArray(linhas)) {
+    res.status(503).send('Agenda indisponível no momento.');
+    return;
+  }
   // Segredo que não existe e negócio sem agendamento devolvem a mesma lista
   // vazia: o calendário simplesmente fica vazio, sem revelar se o link vale.
   const nome = linhas[0]?.negocio ?? 'Leshanot';

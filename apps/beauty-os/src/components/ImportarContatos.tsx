@@ -19,16 +19,24 @@ const TAMANHO_MAXIMO_VCF = 60 * 1024 * 1024;
  * agenda do sistema; em qualquer aparelho lê o arquivo .vcf que o app
  * Contatos exporta — o único caminho no iPhone.
  */
-export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: number) => void }) {
+export function ImportarContatos({ aoConcluir, aoRevisar }: {
+  aoConcluir?: (quantidade: number) => void;
+  /** Avisa quando a lista de revisão abre e fecha (o onboarding segura o "Começar"). */
+  aoRevisar?: (aberta: boolean) => void;
+}) {
   const clientes = useStore(state => state.clients);
   const addClients = useStore(state => state.addClients);
   const setToast = useStore(state => state.setToast);
   const arquivoRef = React.useRef<HTMLInputElement>(null);
   const [revisao, setRevisao] = React.useState<NovoCliente[] | null>(null);
-  const [marcados, setMarcados] = React.useState<Set<number>>(new Set());
+  // Marcação pelo próprio contato, não pela posição: depois de uma falha no
+  // meio, quem já entrou sai da lista e as posições mudam.
+  const [marcados, setMarcados] = React.useState<Set<NovoCliente>>(new Set());
   const [busca, setBusca] = React.useState('');
   const [ocupado, setOcupado] = React.useState(false);
   const seletor = suportaSeletorDeContatos();
+
+  React.useEffect(() => { aoRevisar?.(revisao !== null); }, [revisao !== null]);
 
   const importar = async (lista: NovoCliente[]) => {
     if (lista.length === 0) {
@@ -41,8 +49,21 @@ export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: num
       setToast({ message: `${quantos} contato${quantos === 1 ? '' : 's'} importado${quantos === 1 ? '' : 's'}.`, type: 'success' });
       setRevisao(null);
       aoConcluir?.(quantos);
-    } catch {
-      setToast({ message: 'Não consegui importar. Verifique a internet e tente de novo — quem já entrou não se repete.', type: 'error' });
+    } catch (erro) {
+      // Os primeiros lotes podem ter entrado. Eles saem da lista, para o
+      // "Importar" de novo mandar só o que faltou.
+      const inseridos = (erro as { inseridos?: number })?.inseridos ?? 0;
+      if (inseridos > 0) {
+        const enviados = new Set(lista.slice(0, inseridos));
+        setRevisao(atual => atual && atual.filter(c => !enviados.has(c)));
+        setMarcados(atual => new Set([...atual].filter(c => !enviados.has(c))));
+      }
+      setToast({
+        message: inseridos > 0
+          ? `${inseridos} importados; o restante não entrou. Verifique a internet e toque em Importar de novo.`
+          : 'Não consegui importar. Verifique a internet e tente de novo.',
+        type: 'error',
+      });
     } finally {
       setOcupado(false);
     }
@@ -70,7 +91,21 @@ export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: num
       setToast({ message: 'Arquivo grande demais para um arquivo de contatos.', type: 'error' });
       return;
     }
-    const lidos = lerVCard(await arquivo.text());
+    let texto: string;
+    try {
+      const bytes = await arquivo.arrayBuffer();
+      // Exportações antigas (Outlook, Android antigo) vêm em Windows-1252: lidas
+      // como UTF-8, "João" virava "Jo�o".
+      try {
+        texto = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      } catch {
+        texto = new TextDecoder('windows-1252').decode(bytes);
+      }
+    } catch {
+      setToast({ message: 'Não consegui ler o arquivo. Tente exportar de novo.', type: 'error' });
+      return;
+    }
+    const lidos = lerVCard(texto);
     if (lidos.length === 0) {
       setToast({ message: 'Nenhum contato encontrado. Escolha o arquivo .vcf exportado pelo app Contatos.', type: 'error' });
       return;
@@ -81,7 +116,7 @@ export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: num
       return;
     }
     setRevisao(novos);
-    setMarcados(new Set(novos.map((_, i) => i)));
+    setMarcados(new Set(novos));
     setBusca('');
   };
 
@@ -93,12 +128,12 @@ export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: num
       .filter(({ c }) => !alvo
         || semAcento(c.name).includes(alvo)
         || (digitos.length >= 3 && c.phone.replace(/\D/g, '').includes(digitos)));
-    const todosMarcados = visiveis.every(({ i }) => marcados.has(i));
+    const todosMarcados = visiveis.every(({ c }) => marcados.has(c));
     const alternarTodos = () => setMarcados(atual => {
       const proximo = new Set(atual);
-      for (const { i } of visiveis) {
-        if (todosMarcados) proximo.delete(i);
-        else proximo.add(i);
+      for (const { c } of visiveis) {
+        if (todosMarcados) proximo.delete(c);
+        else proximo.add(c);
       }
       return proximo;
     });
@@ -120,7 +155,7 @@ export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: num
         </button>
         <ul className="max-h-[40vh] overflow-y-auto overscroll-contain rounded-xl border border-ios-border divide-y divide-ios-border">
           {visiveis.map(({ c, i }) => {
-            const marcado = marcados.has(i);
+            const marcado = marcados.has(c);
             return (
               <li key={i}>
                 <label className="flex items-center gap-3 px-4 py-3 cursor-pointer active:bg-ios-text-secondary/10">
@@ -130,8 +165,8 @@ export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: num
                     checked={marcado}
                     onChange={() => setMarcados(atual => {
                       const proximo = new Set(atual);
-                      if (marcado) proximo.delete(i);
-                      else proximo.add(i);
+                      if (marcado) proximo.delete(c);
+                      else proximo.add(c);
                       return proximo;
                     })}
                   />
@@ -162,7 +197,7 @@ export function ImportarContatos({ aoConcluir }: { aoConcluir?: (quantidade: num
           </button>
           <button
             type="button"
-            onClick={() => importar(revisao.filter((_, i) => marcados.has(i)))}
+            onClick={() => importar(revisao.filter(c => marcados.has(c)))}
             disabled={ocupado || marcados.size === 0}
             className="flex-1 h-12 rounded-2xl bg-ios-gold text-[#111214] text-[15px] font-bold disabled:opacity-40"
           >

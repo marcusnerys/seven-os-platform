@@ -69,7 +69,8 @@ function decodificarQP(valor: string): string {
  */
 export function lerVCard(texto: string): ContatoImportado[] {
   // Linha que começa com espaço continua a anterior (RFC 6350).
-  const desdobradas = texto.replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  // Arquivo salvo com BOM no início perdia o primeiro contato ("﻿BEGIN").
+  const desdobradas = texto.replace(/^﻿/, '').replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
   // No quoted-printable, "=" no fim também continua a linha. Só nesse caso:
   // a foto em base64 que o iPhone inclui termina em "=" e não continua.
   const linhas: string[] = [];
@@ -144,13 +145,19 @@ export function contatosNovos(contatos: ContatoImportado[], clientes: ClienteExi
   for (const c of contatos) {
     const nome = c.nome.trim();
     if (!nome) continue;
-    const digitos = digitosTelefoneBR(c.telefone);
+    // Número de outro país ("+1 415...", "00351...") fica como veio: lido
+    // como brasileiro, "+1 415 555 0100" virava (14) 15555-0100 e o WhatsApp
+    // ia para um estranho.
+    const internacional = /^\s*(\+|00)(?!55)/.test(c.telefone);
+    const digitos = internacional ? c.telefone.replace(/\D/g, '') : digitosTelefoneBR(c.telefone);
     if (digitos ? telefones.has(digitos) : nomes.has(semAcento(nome))) continue;
     // Cliente cadastrado à mão sem telefone e o mesmo nome chegando com
     // telefone: é a mesma pessoa, não um segundo cadastro.
     if (digitos && nomesSemTelefone.has(semAcento(nome))) continue;
     // Só formata número nacional completo; os demais ficam com os dígitos.
-    const telefone = digitos.length === 10 || digitos.length === 11 ? formatarTelefoneBR(digitos) : digitos;
+    const telefone = internacional
+      ? c.telefone.trim()
+      : digitos.length === 10 || digitos.length === 11 ? formatarTelefoneBR(digitos) : digitos;
     novos.push({ name: nome, phone: telefone, email: c.email.trim() });
     if (digitos) telefones.add(digitos);
     nomes.add(semAcento(nome));

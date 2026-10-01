@@ -30,4 +30,9 @@ const longo = montarCalendario([{ id: 'b', data: '2026-09-30', hora: '10:00', du
 for (const l of longo.split('\r\n')) assert.ok(new TextEncoder().encode(l).length <= 75, `linha longa: ${l}`);
 assert.ok(longo.replace(/\r\n /g, '').includes('SUMMARY:Coloração completa com hidratação profunda e finalização - Maria da Conceição Albuquerque'));
 
+// CR solto e caracteres de controle da reserva pública não quebram a linha.
+const sujo = montarCalendario([{ id: 'c', data: '2026-09-30', hora: '10:00', duracao: 60, servico: 'Corte', cliente: 'Ana\rBia\u0007', status: 'Confirmado', observacao: null, negocio: 'S' }], 'S', agora);
+assert.ok(sujo.split('\r\n').includes('SUMMARY:Corte - Ana\\nBia'));
+assert.ok(!/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(sujo.replace(/\r\n/g, '')));
+
 console.log('OK — agenda para assinatura no calendário');

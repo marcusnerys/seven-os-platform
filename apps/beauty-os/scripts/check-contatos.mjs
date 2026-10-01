@@ -48,6 +48,7 @@ const android = [
   'END:VCARD',
 ].join('\n');
 assert.deepStrictEqual(lerVCard(android), [{ nome: 'João Pedro da Conceição', telefone: '11966665555', email: '' }]);
+assert.strictEqual(lerVCard('﻿' + dobrado)[0].nome, 'Beatriz Nascimento', 'BOM no início');
 assert.deepStrictEqual(lerVCard(''), []);
 assert.deepStrictEqual(lerVCard('texto qualquer sem vcard'), []);
 
@@ -70,5 +71,12 @@ assert.deepStrictEqual(novos, [
   { name: 'Mariana Lima', phone: '(11) 98888-7777', email: 'm@x.com' },
   { name: 'Sem Telefone', phone: '', email: '' },
 ]);
+
+// Número de outro país não vira brasileiro; +55 e 0055 continuam nacionais.
+assert.deepStrictEqual(contatosNovos([
+  { nome: 'John', telefone: '+1 415 555 0100', email: '' },
+  { nome: 'Rui', telefone: '00351 912 345 678', email: '' },
+  { nome: 'Lia', telefone: '0055 11 97777-1111', email: '' },
+], []).map(c => c.phone), ['+1 415 555 0100', '00351 912 345 678', '(11) 97777-1111']);
 
 console.log('OK — importação de contatos (.vcf e seletor)');
