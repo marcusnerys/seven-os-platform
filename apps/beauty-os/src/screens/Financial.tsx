@@ -677,7 +677,6 @@ export default function Financial() {
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Categoria</label>
                 <Input
-                  voice
                   list="tx-category-options"
                   placeholder={`Ex: ${(newTx.type === 'revenue' ? vertical.revenueCategories : vertical.expenseCategories).slice(0, 2).join(', ')}...`}
                   value={newTx.category}
@@ -692,7 +691,6 @@ export default function Financial() {
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Descrição</label>
                 <Input 
-                  voice
                   placeholder="Descrição opcional"
                   value={newTx.description}
                   onChange={e => setNewTx({ ...newTx, description: e.target.value })}

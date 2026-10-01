@@ -1,8 +1,9 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input } from '../components/UI';
+import { ImportarContatos } from '../components/ImportarContatos';
 import { Logo } from '../components/Logo';
-import { Search, Plus, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
+import { Search, Plus, Contact, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
 import { cn, escapeICS, formatarTelefoneBR, digitosTelefoneBR } from '../lib/utils';
 import { useStore, Client } from '../lib/store';
 import { getVertical } from '../lib/vertical';
@@ -23,6 +24,7 @@ export default function Clients() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportarOpen, setIsImportarOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   
   useEffect(() => {
@@ -201,16 +203,25 @@ export default function Clients() {
           <h1 className="text-[18px] font-bold tracking-tightest uppercase text-ios-text-secondary opacity-40">{vertical.clientNounPlural}</h1>
         </div>
 
-        {/* Search Bar Immersive */}
-        <div className="relative mb-4 shrink-0">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-text-secondary opacity-40 z-10" size={16} />
-          <Input 
-            voice
-            placeholder={`Buscar ${vertical.clientNounPlural.toLowerCase()}...`}
-            className="pl-11 h-11 text-[13px]"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        {/* Busca e importação da agenda do celular lado a lado. */}
+        <div className="flex gap-2 mb-4 shrink-0">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ios-text-secondary opacity-40 z-10" size={16} />
+            <Input
+              placeholder={`Buscar ${vertical.clientNounPlural.toLowerCase()}...`}
+              className="pl-11 h-11 text-[13px]"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsImportarOpen(true)}
+            aria-label="Importar contatos do celular"
+            className="h-11 px-3 rounded-xl bg-white/5 border border-white/10 text-ios-gold flex items-center gap-1.5 text-[12px] font-semibold shrink-0"
+          >
+            <Contact size={16} /> Importar
+          </button>
         </div>
 
         {/* Filter Chips */}
@@ -327,6 +338,13 @@ export default function Clients() {
                     <p className="text-[14px] font-bold text-white mb-1">{nenhum} {cliente} ainda</p>
                     <p className="text-[11px] text-white/50 leading-relaxed">Toque no <span className="text-ios-gold">+</span> para cadastrar<br />{fem ? 'sua' : 'seu'} {primeiro} {cliente}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsImportarOpen(true)}
+                    className="mt-2 h-11 px-5 rounded-2xl bg-ios-gold text-[#111214] text-[13px] font-bold flex items-center gap-2"
+                  >
+                    <Contact size={16} /> Trazer da agenda do celular
+                  </button>
                 </>
               ) : (
                 <>
@@ -351,6 +369,14 @@ export default function Clients() {
       >
         <Plus size={24} strokeWidth={2.5} />
       </button>
+
+      <AnimatePresence>
+        {isImportarOpen && (
+          <Modal isOpen={isImportarOpen} onClose={() => setIsImportarOpen(false)} title="Importar contatos">
+            <ImportarContatos aoConcluir={() => setIsImportarOpen(false)} />
+          </Modal>
+        )}
+      </AnimatePresence>
 
       {/* Client Profile Modal */}
       <AnimatePresence>
@@ -573,7 +599,6 @@ export default function Clients() {
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Nome Completo</label>
                 <Input 
-                  voice
                   placeholder="Ex: Mariana Costa"
                   value={newClient.name}
                   onChange={e => setNewClient({ ...newClient, name: e.target.value })}
@@ -616,7 +641,6 @@ export default function Clients() {
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Tags (Separadas por vírgula)</label>
                 <Input 
-                  voice
                   placeholder="Ex: Frequente, Indicação"
                   value={newClient.tags}
                   onChange={e => setNewClient({ ...newClient, tags: e.target.value })}

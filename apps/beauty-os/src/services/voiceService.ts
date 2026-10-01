@@ -31,14 +31,19 @@ async function fetchComPrazo(url: string, init: RequestInit): Promise<Response> 
 }
 
 export interface VoiceCommandResult {
-  action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip' | 'create_service' | 'get_daily_summary' | 'show_financial_summary' | 'list_inactive_clients' | 'unknown';
+  action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip' | 'create_service' | 'get_daily_summary' | 'show_financial_summary' | 'list_inactive_clients' | 'delete_client' | 'delete_transaction' | 'unknown';
   data?: any;
   message: string;
   status: 'complete' | 'incomplete';
 }
 
 /** O que o comando realmente fez, quando difere do que o Gemini anunciou. */
-export type ResultadoExecucao = { mensagem: string; pergunta: boolean } | null;
+export type ResultadoExecucao = {
+  mensagem: string;
+  pergunta: boolean;
+  /** Exclusão: só roda depois de a pessoa tocar em "Excluir". Devolve a frase final. */
+  confirmar?: () => Promise<string>;
+} | null;
 
 export function useVoiceAssistant() {
   const parseCommand = async (text: string): Promise<VoiceCommandResult> => {
@@ -106,7 +111,7 @@ export function useVoiceAssistant() {
     // o app mandava para uma aba que essa vertical esconde, com o assistente
     // dizendo que tinha dado certo.
     const SO_COM_AGENDA = ['create_appointment', 'cancel_appointment', 'create_client', 'update_client_notes',
-      'update_client_vip', 'create_service', 'search_client', 'send_whatsapp', 'list_inactive_clients'];
+      'update_client_vip', 'create_service', 'search_client', 'send_whatsapp', 'list_inactive_clients', 'delete_client'];
     if (!getVertical(store.settings.businessType).hasScheduling && SO_COM_AGENDA.includes(result.action)) {
       return { mensagem: 'No controle de finanças pessoais não há agenda nem clientes. Posso registrar gastos, receitas ou mostrar o resumo do mês.', pergunta: false };
     }
@@ -314,6 +319,60 @@ export function useVoiceAssistant() {
         // virava wa.me/11999998888, que o WhatsApp lê como número dos EUA.
         const abriu = openWhatsApp(cliente.phone, `Olá ${cliente.name}! Passo para confirmar seu horário.`);
         return abriu ? null : informar(`${cliente.name} não tem um telefone válido no cadastro.`);
+      }
+
+      // Excluir nunca acontece direto da fala: um nome mal ouvido apagaria a
+      // pessoa errada. A folha mostra o que vai sair e espera o toque.
+      case 'delete_client': {
+        const { clientName } = data;
+        if (!clientName) return perguntar('Qual cadastro devo excluir?');
+        const { cliente, aviso } = acharCliente(clientName);
+        if (!cliente) return aviso;
+        return {
+          mensagem: `Excluir o cadastro de ${cliente.name}? Os agendamentos continuam na agenda, e isso não pode ser desfeito.`,
+          pergunta: false,
+          confirmar: async () => {
+            await store.deleteClient(cliente.id);
+            return `Cadastro de ${cliente.name} excluído.`;
+          },
+        };
+      }
+
+      case 'delete_transaction': {
+        const { type, amount, description, date } = data;
+        const valor = Math.abs(Number(amount));
+        const temValor = Number.isFinite(valor) && valor > 0;
+        // Palavras que identificam o lançamento ("gasolina", "aluguel"). As
+        // genéricas saem: "despesa de gasolina" tem que achar "Gasolina".
+        const GENERICAS = ['despesa', 'receita', 'gasto', 'venda', 'lancamento', 'reais', 'pagamento', 'entrada', 'saida'];
+        const palavras = semAcento(String(description ?? ''))
+          .split(/[^a-z0-9]+/)
+          .filter(p => p.length >= 3 && !GENERICAS.includes(p));
+        if (!temValor && palavras.length === 0 && !dataValida(date)) {
+          return perguntar('Qual lançamento devo excluir? Diga o valor ou a descrição.');
+        }
+
+        const candidatos = store.transactions.filter(t =>
+          (type !== 'revenue' && type !== 'expense' ? true : t.type === type) &&
+          (!temValor || Math.abs(t.amount - valor) < 0.005) &&
+          palavras.every(p => semAcento(`${t.description} ${t.category}`).includes(p)) &&
+          (!dataValida(date) || t.date === date)
+        );
+        if (candidatos.length === 0) return informar('Não encontrei esse lançamento no financeiro.');
+        if (candidatos.length > 1) {
+          return perguntar(`Encontrei ${candidatos.length} lançamentos assim. Diga a data ou a descrição para eu achar o certo.`);
+        }
+
+        const t = candidatos[0];
+        const [, mes, dia] = t.date.split('-');
+        return {
+          mensagem: `Excluir ${t.type === 'revenue' ? 'a receita' : 'a despesa'} "${t.description}" de R$ ${reais(t.amount)}, do dia ${dia}/${mes}? Isso não pode ser desfeito.`,
+          pergunta: false,
+          confirmar: async () => {
+            await store.deleteTransaction(t.id);
+            return `${t.type === 'revenue' ? 'Receita' : 'Despesa'} de R$ ${reais(t.amount)} excluída.`;
+          },
+        };
       }
 
       default:

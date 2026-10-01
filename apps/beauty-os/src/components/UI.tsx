@@ -2,7 +2,6 @@ import * as React from 'react';
 import { useStore } from '../lib/store';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Mic, MicOff } from 'lucide-react';
 
 export interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
@@ -99,7 +98,7 @@ export function Toast({ message, type = 'success', isVisible, onClose }: { messa
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: vozAberta ? -20 : 20, scale: 0.9 }}
           className={cn(
-            "fixed left-1/2 -translate-x-1/2 z-[120] w-max max-w-[90vw]",
+            "fixed left-1/2 -translate-x-1/2 z-[300] w-max max-w-[90vw]",
             vozAberta ? "top-[calc(env(safe-area-inset-top)+12px)]" : "bottom-32"
           )}
         >
@@ -222,218 +221,29 @@ export function Modal({ isOpen, onClose, title, children, footer }: { isOpen: bo
   );
 }
 
-export function VoiceButton({ onResult, onInterim, className }: { onResult: (text: string) => void, onInterim?: (text: string) => void, className?: string }) {
-  const [isListening, setIsListening] = React.useState(false);
-  const recognitionRef = React.useRef<any>(null);
-  // O texto parcial precisa sobreviver até o fim do reconhecimento. Se a fala
-  // termina sem um resultado "final" — silêncio, toque para parar, oscilação —
-  // é ele que vira o valor. Sem isso o campo mostrava o texto e o estado ficava
-  // vazio, travando o botão de salvar sem explicação.
-  const ultimoInterim = React.useRef('');
-  const houveFinal = React.useRef(false);
-
-  const toggleListening = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      return;
-    }
-
-    if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'pt-BR';
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognitionRef.current = recognition;
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-
-      if (finalTranscript && onResult) {
-        houveFinal.current = true;
-        ultimoInterim.current = '';
-        onResult(finalTranscript);
-      }
-      if (interimTranscript) {
-        ultimoInterim.current = interimTranscript;
-        if (onInterim) onInterim(interimTranscript);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error', event.error);
-      if (event.error === 'not-allowed') {
-        alert('Permissão de microfone negada. Verifique as configurações do seu navegador e do app.');
-      }
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      // Terminou sem resultado final, mas havia texto na tela: comita o que a
-      // pessoa viu. Assim o que está escrito no campo é sempre o que está no
-      // estado, e o botão de salvar reflete a realidade.
-      if (!houveFinal.current && ultimoInterim.current && onResult) {
-        onResult(ultimoInterim.current);
-      }
-      ultimoInterim.current = '';
-      houveFinal.current = false;
-    };
-
-    recognition.onstart = () => {
-      ultimoInterim.current = '';
-      houveFinal.current = false;
-      setIsListening(true);
-    };
-
-    recognition.start();
-  };
-
-  const hasSupport = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-
-  if (!hasSupport) return null;
-
+// O microfone dentro de cada campo saiu: quem preenche um formulário digita.
+// Para falar, o assistente de voz da barra inferior entende o comando inteiro
+// e decide sozinho se é agendamento, receita ou despesa.
+export function Input({ className, ...props }: { className?: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <button
-      type="button"
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleListening(); }}
+    <input
       className={cn(
-        "p-2 rounded-lg transition-all active:scale-95 shrink-0 flex items-center justify-center",
-        isListening ? "text-red-500 animate-pulse" : "text-ios-gold/60 hover:text-ios-gold",
+        "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-ios-text-primary focus:outline-none focus:border-ios-gold/50 transition-colors",
         className
       )}
-      title={isListening ? "Ouvindo..." : "Falar"}
-    >
-      {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-    </button>
+      {...props}
+    />
   );
 }
 
-export function Input({ 
-  voice = false, 
-  onResult, 
-  className, 
-  value,
-  onChange,
-  ...props 
-}: { 
-  voice?: boolean, 
-  onResult?: (text: string) => void,
-  className?: string,
-  value?: string,
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  const [interim, setInterim] = React.useState('');
-
-  const handleVoiceResult = (text: string) => {
-    setInterim('');
-    if (onResult) {
-      onResult(text);
-    } else if (onChange) {
-      // Create a fake event to trigger onChange
-      const fakeEvent = {
-        target: { value: value ? value + ' ' + text : text }
-      } as React.ChangeEvent<HTMLInputElement>;
-      onChange(fakeEvent);
-    }
-  };
-
-  const handleInterim = (text: string) => {
-    setInterim(text);
-  };
-
+export function Textarea({ className, ...props }: { className?: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
-    <div className="relative flex items-center group w-full">
-      <input
-        className={cn(
-          "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-ios-text-primary focus:outline-none focus:border-ios-gold/50 transition-colors pr-10",
-          className
-        )}
-        value={interim ? (value ? value + ' ' + interim : interim) : value}
-        onChange={(e) => {
-          // Digitar descarta qualquer texto parcial pendente, senão o campo
-          // mostraria o que foi digitado colado no que foi falado.
-          if (interim) setInterim('');
-          if (onChange) onChange(e);
-        }}
-        {...props}
-      />
-      {voice && (
-        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-          <VoiceButton onResult={handleVoiceResult} onInterim={handleInterim} />
-        </div>
+    <textarea
+      className={cn(
+        "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-ios-gold/50 transition-colors min-h-[100px]",
+        className
       )}
-    </div>
-  );
-}
-
-export function Textarea({ 
-  voice = false, 
-  onResult, 
-  className, 
-  value,
-  onChange,
-  ...props 
-}: { 
-  voice?: boolean, 
-  onResult?: (text: string) => void,
-  className?: string,
-  value?: string,
-  onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
-} & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const [interim, setInterim] = React.useState('');
-
-  const handleVoiceResult = (text: string) => {
-    setInterim('');
-    if (onResult) {
-      onResult(text);
-    } else if (onChange) {
-      const fakeEvent = {
-        target: { value: value ? value + ' ' + text : text }
-      } as React.ChangeEvent<HTMLTextAreaElement>;
-      onChange(fakeEvent);
-    }
-  };
-
-  const handleInterim = (text: string) => {
-    setInterim(text);
-  };
-
-  return (
-    <div className="relative flex flex-col group w-full">
-      <textarea
-        className={cn(
-          "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-ios-gold/50 transition-colors min-h-[100px] pr-10",
-          className
-        )}
-        value={interim ? (value ? value + ' ' + interim : interim) : value}
-        onChange={(e) => {
-          if (interim) setInterim('');
-          if (onChange) onChange(e);
-        }}
-        {...props}
-      />
-      {voice && (
-        <div className="absolute right-2 top-3">
-          <VoiceButton onResult={handleVoiceResult} onInterim={handleInterim} />
-        </div>
-      )}
-    </div>
+      {...props}
+    />
   );
 }

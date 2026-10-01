@@ -703,7 +703,6 @@ export default function Agenda() {
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-ios-text-secondary uppercase px-1">Serviço</label>
                   <Input 
-                    voice
                     placeholder={`Nome do ${vertical.serviceNoun.toLowerCase()}`} 
                     value={newAppt.service}
                     onChange={e => setNewAppt({ ...newAppt, service: e.target.value })}
@@ -757,7 +756,6 @@ export default function Agenda() {
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-bold text-ios-text-secondary uppercase px-1">Observações</label>
                 <Textarea 
-                  voice
                   placeholder="Detalhes opcionais..." 
                   value={newAppt.notes}
                   onChange={e => setNewAppt({ ...newAppt, notes: e.target.value })}

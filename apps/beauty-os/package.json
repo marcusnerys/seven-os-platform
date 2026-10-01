@@ -14,7 +14,9 @@
     "check:ocr": "esbuild src/lib/ocr.ts --bundle --format=esm --outfile=node_modules/.tmp/ocr.mjs --log-level=error && node scripts/check-ocr.mjs",
     "check:ics": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-ics.mjs",
     "check:slots": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-slots.mjs",
-    "check": "npm run check:ocr && npm run check:ics && npm run check:slots && npm run check:helpers && npm run check:agent && npm run check:chat",
+    "check": "npm run check:ocr && npm run check:ics && npm run check:slots && npm run check:helpers && npm run check:contatos && npm run check:agenda && npm run check:agent && npm run check:chat",
+    "check:contatos": "esbuild src/lib/contatos.ts --bundle --format=esm --outfile=node_modules/.tmp/contatos.mjs --log-level=error && node scripts/check-contatos.mjs",
+    "check:agenda": "esbuild api/agenda.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/agenda.mjs --log-level=error && node scripts/check-agenda.mjs",
     "check:helpers": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-helpers.mjs",
     "check:agent": "esbuild api/_lib/assistant-tools.ts --bundle --format=esm --outfile=node_modules/.tmp/assistant-tools.mjs --log-level=error && node scripts/check-agent.mjs",
     "check:chat": "node scripts/check-chat.mjs"
