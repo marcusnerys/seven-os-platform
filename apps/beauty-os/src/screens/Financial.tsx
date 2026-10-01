@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Modal, Button, Toast, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { ChevronDown, Plus, Trash2, TrendingUp, TrendingDown, X, FileUp, CheckSquare, Square, Loader2 } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, TrendingUp, TrendingDown, X, FileUp, CheckSquare, Square } from 'lucide-react';
 import { cn, dataLocal } from '../lib/utils';
 import { useStore } from '../lib/store';
-import { readStatementWithOCR, sanitizarTransacoes, type ParsedTransaction } from '../lib/ocr';
-import { supabase } from '../lib/supabase';
+import { type ParsedTransaction } from '../lib/ocr';
+import { useImportacoes } from '../lib/importacoes';
 import { getVertical } from '../lib/vertical';
 
 export default function Financial() {
@@ -16,9 +16,9 @@ export default function Financial() {
   const [hoverCategory, setHoverCategory] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
-  const [isParsingStatement, setIsParsingStatement] = useState(false);
-  const [parseMode, setParseMode] = useState<'ai' | 'ocr'>('ai');
-  const [ocrProgress, setOcrProgress] = useState(0);
+  // Leituras de extrato cujos lançamentos estão na revisão agora.
+  const [idsEmRevisao, setIdsEmRevisao] = useState<string[]>([]);
+  const revisarImportacoes = useImportacoes(state => state.revisar);
   const [parsedTxs, setParsedTxs] = useState<Array<{ date: string; description: string; amount: number; type: 'revenue' | 'expense'; category: string; selected: boolean; jaLancada: boolean }>>([]);
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -48,117 +48,50 @@ export default function Financial() {
     description: ''
   });
 
-  /**
-   * Plano A: Edge Function do Supabase, que fala com o Gemini.
-   * A chave fica no servidor — nunca no bundle. Lança erro em qualquer
-   * falha, para o chamador cair no OCR local.
-   */
-  const readWithAI = async (file: File): Promise<ParsedTransaction[]> => {
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove o prefixo "data:image/jpeg;base64," — a API quer só o payload.
-        resolve(result.split(',')[1] ?? result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+  // A leitura roda em segundo plano (src/lib/importacoes.ts). Quando a
+  // pessoa toca em "Revisar", os lançamentos de todos os arquivos prontos
+  // chegam aqui numa lista só.
+  useEffect(() => {
+    if (!revisarImportacoes) return;
+    const { itens, setRevisar } = useImportacoes.getState();
+    setRevisar(false);
+    const prontos = itens.filter(i => i.status === 'pronto');
+    if (!prontos.length) return;
+    const txs: ParsedTransaction[] = prontos.flatMap(i => i.transacoes);
+
+    // Mandar o mesmo extrato duas vezes é o erro mais fácil de cometer, e
+    // nada no caminho impedia: o lançamento entrava de novo e o mês fechava
+    // com o dobro. Mesma data, mesmo valor e mesma descrição já no
+    // Financeiro — ou repetidos entre os arquivos — chegam desmarcados.
+    const chave = (t: { date: string; amount: number; description: string }) =>
+      `${t.date}|${t.amount.toFixed(2)}|${t.description.trim().toLowerCase()}`;
+    const jaExiste = new Set(transactions.map(chave));
+    const marcadas = txs.map(t => {
+      const jaLancada = jaExiste.has(chave(t));
+      jaExiste.add(chave(t));
+      return { ...t, jaLancada, selected: !jaLancada };
     });
 
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) throw new Error('Supabase não configurado');
-
-    // A função exige o token de quem está logado. Com a chave pública
-    // bastando, qualquer pessoa na internet podia gastar a cota gratuita do
-    // Gemini, que é uma só para todos os negócios.
-    const { data: sessao } = await supabase.auth.getSession();
-    const token = sessao.session?.access_token;
-    if (!token) throw new Error('Sessão expirada. Entre de novo.');
-
-    const res = await fetch(`${supabaseUrl}/functions/v1/parse-statement`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: supabaseKey,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ fileBase64: base64, mimeType: file.type }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-
-    return sanitizarTransacoes(data.transactions, dataLocal());
-  };
-
-  const handleStatementFile = async (file: File) => {
-    setIsFabOpen(false);
-    // Acima do limite da função a leitura falhava e caía no modo offline, que
-    // recusa PDF pedindo "tire uma foto" — sem nunca dizer que o problema era
-    // o tamanho.
-    if (file.size > 20 * 1024 * 1024) {
-      setToast({ message: 'Arquivo grande demais. Envie até 20 MB, ou uma foto de cada página.', type: 'error' });
-      return;
-    }
-    setIsParsingStatement(true);
-    setParseMode('ai');
-    setOcrProgress(0);
-    try {
-      let txs: ParsedTransaction[] = [];
-
-      try {
-        txs = await readWithAI(file);
-      } catch (aiError) {
-        // Limite de uso ou sessão expirada não se resolvem lendo offline, e
-        // para PDF o modo offline nem existe: mostra o motivo real.
-        const motivo = (aiError as Error).message || '';
-        if (/Limite de leituras|Sessão expirada|grande demais/.test(motivo)) {
-          setToast({ message: motivo, type: 'error' });
-          return;
-        }
-        // Chave expirada, sem cota ou offline: cai para o OCR local (grátis, sem chave).
-        console.warn('IA indisponível, usando leitura local:', (aiError as Error).message);
-        setParseMode('ocr');
-        txs = await readStatementWithOCR(file, pct => setOcrProgress(pct));
-      }
-
-      if (!txs.length) {
-        setToast({ message: 'Nenhuma transação encontrada. Tente uma foto mais nítida.', type: 'error' });
-        return;
-      }
-
-      // Fotografar o mesmo extrato duas vezes é o erro mais fácil de cometer,
-      // e nada no caminho impedia: o lançamento entrava de novo e o mês
-      // fechava com o dobro. Mesma data, mesmo valor e mesma descrição já
-      // no Financeiro chega marcado como repetido e desmarcado.
-      const jaExiste = new Set(
-        transactions.map(t => `${t.date}|${t.amount.toFixed(2)}|${t.description.trim().toLowerCase()}`)
-      );
-
-      const marcadas = txs.map(t => {
-        const jaLancada = jaExiste.has(`${t.date}|${t.amount.toFixed(2)}|${t.description.trim().toLowerCase()}`);
-        return { ...t, jaLancada, selected: !jaLancada };
+    const repetidas = marcadas.filter(t => t.jaLancada).length;
+    if (repetidas) {
+      setToast({
+        message: repetidas === 1
+          ? '1 lançamento já estava no Financeiro e veio desmarcado.'
+          : `${repetidas} lançamentos já estavam no Financeiro e vieram desmarcados.`,
+        type: 'success',
       });
-
-      const repetidas = marcadas.filter(t => t.jaLancada).length;
-      if (repetidas) {
-        setToast({
-          message: repetidas === 1
-            ? '1 lançamento já estava no Financeiro e veio desmarcado.'
-            : `${repetidas} lançamentos já estavam no Financeiro e vieram desmarcados.`,
-          type: 'success',
-        });
-      }
-
-      setParsedTxs(marcadas);
-      setShowImportPreview(true);
-    } catch (err) {
-      setToast({ message: String((err as Error).message || err), type: 'error' });
-    } finally {
-      setIsParsingStatement(false);
-      setOcrProgress(0);
     }
+    setIdsEmRevisao(prontos.map(i => i.id));
+    setParsedTxs(marcadas);
+    setShowImportPreview(true);
+  }, [revisarImportacoes]);
+
+  /** Fecha a revisão; as leituras revisadas saem do painel. */
+  const fecharRevisao = () => {
+    setShowImportPreview(false);
+    setParsedTxs([]);
+    if (idsEmRevisao.length) useImportacoes.getState().descartar(idsEmRevisao);
+    setIdsEmRevisao([]);
   };
 
   const handleConfirmImport = async () => {
@@ -185,8 +118,7 @@ export default function Financial() {
 
     if (!falharam.length) {
       setToast({ message: `${gravadas} transaç${gravadas > 1 ? 'ões importadas' : 'ão importada'} com sucesso!`, type: 'success' });
-      setShowImportPreview(false);
-      setParsedTxs([]);
+      fecharRevisao();
       return;
     }
 
@@ -534,47 +466,15 @@ export default function Financial() {
         id="statement-file-input"
         type="file"
         accept="application/pdf,image/*"
+        multiple
         className="hidden"
         onChange={e => {
-          const file = e.target.files?.[0];
-          if (file) handleStatementFile(file);
+          const files: File[] = e.target.files ? Array.from<File>(e.target.files) : [];
+          setIsFabOpen(false);
+          if (files.length) useImportacoes.getState().enviar(files);
           e.target.value = '';
         }}
       />
-
-      {/* Parsing overlay */}
-      <AnimatePresence>
-        {isParsingStatement && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center gap-6 p-8"
-          >
-            <div className="w-20 h-20 rounded-2xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
-              <Loader2 size={36} className="text-violet-400 animate-spin" />
-            </div>
-            <div className="text-center">
-              <p className="text-[18px] font-bold text-white mb-1">
-                {parseMode === 'ai' ? 'Lendo extrato com IA...' : 'Lendo no modo offline...'}
-              </p>
-              <p className="text-[13px] text-white/40">
-                {parseMode === 'ai'
-                  ? 'Identificando entradas e saídas'
-                  : `Reconhecendo texto ${Math.round(ocrProgress * 100)}%`}
-              </p>
-            </div>
-            {parseMode === 'ocr' && (
-              <div className="w-56 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <div
-                  className="h-full bg-violet-400 transition-all duration-300"
-                  style={{ width: `${Math.max(4, ocrProgress * 100)}%` }}
-                />
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Import Preview Modal */}
       <AnimatePresence>
@@ -592,7 +492,7 @@ export default function Financial() {
                   {parsedTxs.filter(t => t.selected).length} de {parsedTxs.length} selecionadas
                 </p>
               </div>
-              <button onClick={() => { setShowImportPreview(false); setParsedTxs([]); }} className="p-2 rounded-full bg-white/5 text-white/50">
+              <button onClick={fecharRevisao} className="p-2 rounded-full bg-white/5 text-white/50">
                 <X size={20} />
               </button>
             </div>
@@ -613,19 +513,19 @@ export default function Financial() {
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold text-white truncate">{tx.description}</p>
                     <p className="text-[10px] text-white/30 mt-0.5">
-                      {tx.category} · {tx.date}
+                      {tx.category} · {tx.date.split('-').reverse().join('/')}
                       {tx.jaLancada && <span className="text-amber-400/90"> · já lançada</span>}
                     </p>
                   </div>
                   <span className={cn("text-[14px] font-bold shrink-0", tx.type === 'revenue' ? "text-emerald-400" : "text-red-400")}>
-                    {tx.type === 'revenue' ? '+' : '-'}R$ {tx.amount.toFixed(2)}
+                    {tx.type === 'revenue' ? '+' : '-'}R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </button>
               ))}
             </div>
 
             <div className="p-5 border-t border-white/8 flex gap-3">
-              <Button variant="ghost" className="flex-1 h-12" onClick={() => { setShowImportPreview(false); setParsedTxs([]); }}>
+              <Button variant="ghost" className="flex-1 h-12" onClick={fecharRevisao}>
                 Cancelar
               </Button>
               <Button
