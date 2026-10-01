@@ -460,6 +460,20 @@ export default function More() {
                   </div>
                 </div>
 
+                {/* Dízimo: o cartão do Financeiro some quando desligado; volta daqui. */}
+                <label className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer" style={{ background: inputBg, border: `1px solid ${inputBorder}` }}>
+                  <span className="flex flex-col">
+                    <span className="text-[14px] font-semibold" style={{ color: textPrimary }}>Controle do dízimo</span>
+                    <span className="text-[12px] text-ios-text-secondary">Mostra no Financeiro quanto devolver das receitas</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 accent-[var(--color-ios-gold)]"
+                    checked={editSettings.dizimoAtivo !== false}
+                    onChange={e => setEditSettings({ ...editSettings, dizimoAtivo: e.target.checked })}
+                  />
+                </label>
+
                 {/* Theme section */}
                 <div className="flex flex-col gap-3 pt-2 border-t border-white/5">
                   <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Tema do App</label>

@@ -9,9 +9,16 @@ import { useStore } from '../lib/store';
 import { type ParsedTransaction } from '../lib/ocr';
 import { useImportacoes } from '../lib/importacoes';
 import { getVertical } from '../lib/vertical';
+import { periodo as calcularPeriodo, noPeriodo, serie, type TipoPeriodo } from '../lib/financeiro';
+import { SeletorPeriodo } from '../components/financeiro/SeletorPeriodo';
+import { CartaoDizimo } from '../components/financeiro/CartaoDizimo';
+import { FixosParcelados } from '../components/financeiro/FixosParcelados';
 
 export default function Financial() {
-  const { transactions, addTransaction, deleteTransaction, getRevenueData, getExpenseData, getCategoryData, modalToOpen, modalData, setModalToOpen } = useStore();
+  const { transactions, addTransaction, deleteTransaction, modalToOpen, modalData, setModalToOpen } = useStore();
+  // Período na tela: começa no mês atual.
+  const [tipoPeriodo, setTipoPeriodo] = useState<TipoPeriodo>('mes');
+  const [referencia, setReferencia] = useState(dataLocal());
   const [activeSegment, setActiveSegment] = useState<'resumo' | 'receitas' | 'despesas'>('resumo');
   const [hoverCategory, setHoverCategory] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -38,7 +45,7 @@ export default function Financial() {
   }, [modalToOpen, modalData, setModalToOpen]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
-  
+
   // New Transaction Form State
   const [newTx, setNewTx] = useState({
     amount: 0,
@@ -163,25 +170,42 @@ export default function Financial() {
     }
   };
 
-  const revenueData = getRevenueData();
-  const expenseData = getExpenseData();
-  const pieData = getCategoryData();
-  
-  const totalRevenue = transactions.filter(t => t.type === 'revenue').reduce((acc, curr) => acc + curr.amount, 0);
-  const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
+  const per = calcularPeriodo(tipoPeriodo, referencia);
+  const doPeriodo = noPeriodo(transactions, per);
+  const totalRevenue = doPeriodo.filter(t => t.type === 'revenue').reduce((acc, curr) => acc + curr.amount, 0);
+  const totalExpenses = doPeriodo.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
   const netProfit = totalRevenue - totalExpenses;
 
-  // Resultado por dia, na ordem das datas. Antes a série subtraía a despesa
-  // de mesma posição na lista — a terceira receita menos a terceira
-  // despesa, de dias diferentes — e o gráfico de lucro não significava nada.
-  const saldoPorDia = transactions.reduce<Record<string, number>>((acc, t) => {
-    acc[t.date] = (acc[t.date] || 0) + (t.type === 'revenue' ? t.amount : -t.amount);
-    return acc;
-  }, {});
-  const diasOrdenados = Object.keys(saldoPorDia).sort().slice(-30);
-  const profitData = diasOrdenados.length
-    ? diasOrdenados.map(d => ({ value: saldoPorDia[d] }))
-    : Array(8).fill({ value: 0 });
+  // Um ponto por dia (por mês, no ano), em ordem de data. O gráfico antigo
+  // ligava cada lançamento solto na ordem em que entrou: com um extrato
+  // importado virava uma serra que passava por cima do texto do cartão.
+  // No período de um dia só, não há linha para desenhar.
+  const comGrafico = tipoPeriodo !== 'dia';
+  const revenueData = serie(transactions, per, 'revenue').map(value => ({ value }));
+  const expenseData = serie(transactions, per, 'expense').map(value => ({ value }));
+  const profitData = serie(transactions, per, 'saldo').map(value => ({ value }));
+
+  const CORES = ['#00E6FF', '#7B61FF', '#FF6B9D', '#FF8A5B', '#34C759', '#FFD60A'];
+  const porCategoria = doPeriodo
+    .filter(t => t.type === 'expense')
+    .reduce<Record<string, number>>((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
+  const pieData = Object.entries(porCategoria)
+    .sort((x, y) => y[1] - x[1])
+    .map(([name, valor], i) => ({ name, value: Math.round((valor / totalExpenses) * 100) || 0, color: CORES[i % CORES.length] }));
+
+  // Listas por dia, do mais recente para o mais antigo.
+  const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const rotuloDoDia = (iso: string) => {
+    const [ano, mes, dia] = iso.split('-').map(Number);
+    return `${DIAS_SEMANA[new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay()]}, ${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`;
+  };
+  const listaPorDia = (tipo: 'revenue' | 'expense') => {
+    const grupos = new Map<string, typeof doPeriodo>();
+    for (const t of [...doPeriodo].filter(x => x.type === tipo).sort((x, y) => y.date.localeCompare(x.date))) {
+      grupos.set(t.date, [...(grupos.get(t.date) ?? []), t]);
+    }
+    return [...grupos.entries()];
+  };
 
   const apagarTransacao = async (tx: { id: string; description: string; amount: number }) => {
     if (!confirm(`Apagar "${tx.description}" de R$ ${tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) return;
@@ -218,7 +242,7 @@ export default function Financial() {
             >
               {tab.label}
               {activeSegment === tab.id && (
-                <motion.div 
+                <motion.div
                    layoutId="activeSubTab"
                    className="absolute bottom-[2px] left-1/2 -translate-x-1/2 w-[30%] h-[2px] bg-ios-gold rounded-full"
                 />
@@ -228,90 +252,72 @@ export default function Financial() {
         </div>
       </div>
 
-      <div className="flex items-center gap-1 group cursor-pointer active:opacity-60 transition-opacity mb-4">
-        <span className="text-[20px] font-semibold text-ios-text-primary">Total Acumulado</span>
+      <div className="mb-5">
+        <SeletorPeriodo
+          tipo={tipoPeriodo}
+          referencia={referencia}
+          aoMudar={(tipo, ref) => { setTipoPeriodo(tipo); setReferencia(ref); }}
+        />
       </div>
 
       <div className="flex flex-col gap-5">
         <AnimatePresence mode="wait">
           {activeSegment === 'resumo' && (
-            <motion.div 
+            <motion.div
               key="resumo"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               className="flex flex-col gap-5"
             >
-              <GlassCard className="p-5 flex flex-col justify-between h-[160px] relative overflow-hidden border-none rounded-[22px]">
-                <div className="z-10 h-full flex flex-col">
-                  <span className="text-[14px] font-medium text-ios-text-secondary">Receitas Totais</span>
-                  <p className="text-[28px] font-bold mt-1 text-ios-text-primary">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  <span className="text-[16px] font-bold text-ios-gold mt-1">Resumo de Vendas</span>
-                </div>
-
-                <div className="absolute inset-x-0 bottom-0 h-[80px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={revenueData}>
-                      <defs>
-                        <linearGradient id="colorAccent" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--color-ios-gold)" stopOpacity={0.2}/>
-                          <stop offset="100%" stopColor="var(--color-ios-gold)" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="var(--color-ios-gold)"
-                        strokeWidth={3}
-                        fill="url(#colorAccent)"
-                        strokeLinecap="round"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+              <GlassCard className="p-5 flex flex-col overflow-hidden border-none rounded-[22px]">
+                <span className="text-[14px] font-medium text-ios-text-secondary">Receitas</span>
+                <p className="text-[28px] font-bold mt-1 text-ios-text-primary">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                {comGrafico && (
+                  <div className="h-[64px] mt-3 -mx-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={revenueData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+                        <defs>
+                          <linearGradient id="colorAccent" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="var(--color-ios-gold)" stopOpacity={0.25}/>
+                            <stop offset="100%" stopColor="var(--color-ios-gold)" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <Area type="monotone" dataKey="value" stroke="var(--color-ios-gold)" strokeWidth={2.5} fill="url(#colorAccent)" strokeLinecap="round" isAnimationActive={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </GlassCard>
 
               <div className="grid grid-cols-2 gap-4">
-                <GlassCard className="p-4 flex flex-col justify-between h-[150px] relative overflow-hidden border-none rounded-[22px]">
-                  <div className="z-10 h-full flex flex-col">
-                    <span className="text-[13px] font-medium text-ios-text-secondary">Despesas</span>
-                    <p className="text-[20px] font-bold mt-1 text-ios-text-primary">R$ {totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="absolute inset-x-0 bottom-4 h-[60px]">
+                <GlassCard className="p-4 flex flex-col overflow-hidden border-none rounded-[22px]">
+                  <span className="text-[13px] font-medium text-ios-text-secondary">Despesas</span>
+                  <p className="text-[18px] font-bold mt-1 text-ios-text-primary">R$ {totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  {comGrafico && <div className="h-[44px] mt-3 -mx-1">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={expenseData}>
-                        <Area 
-                          type="monotone" 
-                          dataKey="value" 
-                          stroke="#E6C08B" 
-                          strokeWidth={2.5} 
-                          fill="transparent" 
-                        />
+                      <AreaChart data={expenseData} margin={{ top: 3, right: 3, bottom: 3, left: 3 }}>
+                        <Area type="monotone" dataKey="value" stroke="#E6C08B" strokeWidth={2} fill="transparent" isAnimationActive={false} />
                       </AreaChart>
                     </ResponsiveContainer>
-                  </div>
+                  </div>}
                 </GlassCard>
 
-                <GlassCard className="p-4 flex flex-col justify-between h-[150px] relative overflow-hidden border-none rounded-[22px]">
-                  <div className="z-10 h-full flex flex-col">
-                    <span className="text-[13px] font-medium text-ios-text-secondary">Lucro líquido</span>
-                    <p className="text-[20px] font-bold mt-1 text-ios-text-primary">R$ {netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="absolute inset-x-0 bottom-4 h-[60px]">
+                <GlassCard className="p-4 flex flex-col overflow-hidden border-none rounded-[22px]">
+                  <span className="text-[13px] font-medium text-ios-text-secondary">{vertical.hasScheduling ? 'Lucro líquido' : 'Saldo'}</span>
+                  <p className={cn('text-[18px] font-bold mt-1', netProfit < 0 ? 'text-red-400' : 'text-ios-text-primary')}>R$ {netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  {comGrafico && <div className="h-[44px] mt-3 -mx-1">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={profitData}>
-                        <Area 
-                          type="monotone" 
-                          dataKey="value" 
-                          stroke="var(--color-ios-gold)"
-                          strokeWidth={2.5} 
-                          fill="transparent" 
-                        />
+                      <AreaChart data={profitData} margin={{ top: 3, right: 3, bottom: 3, left: 3 }}>
+                        <Area type="monotone" dataKey="value" stroke="var(--color-ios-gold)" strokeWidth={2} fill="transparent" isAnimationActive={false} />
                       </AreaChart>
                     </ResponsiveContainer>
-                  </div>
+                  </div>}
                 </GlassCard>
               </div>
+
+              <CartaoDizimo periodo={per} />
+              <FixosParcelados />
 
               {pieData.length > 0 && (
                 <div className="flex flex-col gap-6 mt-4">
@@ -331,9 +337,9 @@ export default function Financial() {
                             onMouseLeave={() => setHoverCategory(null)}
                           >
                             {pieData.map((entry, index) => (
-                              <Cell 
-                                key={`cell-${index}`} 
-                                fill={entry.color} 
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={entry.color}
                                 opacity={hoverCategory === null || hoverCategory === entry.name ? 1 : 0.3}
                               />
                             ))}
@@ -341,7 +347,7 @@ export default function Financial() {
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    
+
                     <div className="flex-1 flex flex-col gap-4">
                       {pieData.map((item, i) => (
                         <div key={i} className="flex items-center justify-between">
@@ -367,34 +373,42 @@ export default function Financial() {
               exit={{ opacity: 0, y: -20 }}
               className="flex flex-col gap-4"
             >
-              {transactions
-                .filter(t => t.type === (activeSegment === 'receitas' ? 'revenue' : 'expense'))
-                .map((tx) => (
-                  <GlassCard key={tx.id} className="p-4 border-none rounded-[20px] flex items-center justify-between group">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[15px] font-bold text-ios-text-primary">{tx.category}</span>
-                      <span className="text-[12px] text-ios-text-secondary">{tx.date} • {tx.description}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className={cn("text-[16px] font-bold", tx.type === 'revenue' ? "text-ios-gold" : "text-red-400")}>
-                        {tx.type === 'revenue' ? "+" : "-"} R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
-                      {/* Era opacity-0 com hover: invisível no celular, mas
-                          clicável. Tocar perto do valor apagava o lançamento
-                          na hora, sem confirmação e sem aviso. */}
-                      <button 
-                        onClick={() => apagarTransacao(tx)}
-                        aria-label="Apagar lançamento"
-                        className="opacity-50 hover:opacity-100 p-2 text-red-500 transition-opacity"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </GlassCard>
+              {listaPorDia(activeSegment === 'receitas' ? 'revenue' : 'expense').map(([dia, doDia]) => (
+                <div key={dia} className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[12px] font-bold uppercase tracking-wider text-ios-text-secondary">{rotuloDoDia(dia)}</span>
+                    <span className="text-[12px] font-semibold text-ios-text-secondary">
+                      R$ {doDia.reduce((n, t) => n + t.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {doDia.map(tx => (
+                    <GlassCard key={tx.id} className="p-4 border-none rounded-[20px] flex items-center justify-between gap-3">
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="text-[15px] font-bold text-ios-text-primary truncate">{tx.description || tx.category}</span>
+                        <span className="text-[12px] text-ios-text-secondary truncate">{tx.category}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={cn("text-[15px] font-bold", tx.type === 'revenue' ? "text-ios-gold" : "text-red-400")}>
+                          {tx.type === 'revenue' ? "+" : "-"} R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                        {/* Era opacity-0 com hover: invisível no celular, mas
+                            clicável. Tocar perto do valor apagava o lançamento
+                            na hora, sem confirmação e sem aviso. */}
+                        <button
+                          onClick={() => apagarTransacao(tx)}
+                          aria-label="Apagar lançamento"
+                          className="opacity-50 hover:opacity-100 p-2 text-red-500 transition-opacity"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </GlassCard>
+                  ))}
+                </div>
               ))}
-              {transactions.filter(t => t.type === (activeSegment === 'receitas' ? 'revenue' : 'expense')).length === 0 && (
+              {doPeriodo.filter(t => t.type === (activeSegment === 'receitas' ? 'revenue' : 'expense')).length === 0 && (
                 <div className="py-20 text-center opacity-20">
-                   <p className="text-[11px] font-bold uppercase tracking-widest leading-loose">Nenhuma transação <br /> registrada</p>
+                   <p className="text-[11px] font-bold uppercase tracking-widest leading-loose">Nada lançado <br /> neste período</p>
                 </div>
               )}
             </motion.div>
@@ -544,17 +558,17 @@ export default function Financial() {
       {/* Add Transaction Modal */}
       <AnimatePresence>
         {isAddModalOpen && (
-          <Modal 
-            isOpen={isAddModalOpen} 
-            onClose={() => setIsAddModalOpen(false)} 
+          <Modal
+            isOpen={isAddModalOpen}
+            onClose={() => setIsAddModalOpen(false)}
             title={newTx.type === 'revenue' ? 'Nova Receita' : 'Nova Despesa'}
             footer={
               <div className="grid grid-cols-2 gap-3">
                 <Button variant="secondary" onClick={() => setIsAddModalOpen(false)}>
                   Cancelar
                 </Button>
-                <Button 
-                  onClick={handleAddTransaction} 
+                <Button
+                  onClick={handleAddTransaction}
                   loading={isSubmitting}
                   disabled={!newTx.amount || !newTx.category}
                 >
@@ -566,7 +580,7 @@ export default function Financial() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Valor (R$)</label>
-                <input 
+                <input
                   type="number"
                   placeholder="0,00"
                   className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none"
@@ -590,7 +604,7 @@ export default function Financial() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Descrição</label>
-                <Input 
+                <Input
                   placeholder="Descrição opcional"
                   value={newTx.description}
                   onChange={e => setNewTx({ ...newTx, description: e.target.value })}
@@ -598,7 +612,7 @@ export default function Financial() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">Data</label>
-                <input 
+                <input
                   type="date"
                   className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none"
                   value={newTx.date}
@@ -610,11 +624,11 @@ export default function Financial() {
         )}
       </AnimatePresence>
 
-      <Toast 
-        isVisible={!!toast} 
-        message={toast?.message || ''} 
-        type={toast?.type} 
-        onClose={() => setToast(null)} 
+      <Toast
+        isVisible={!!toast}
+        message={toast?.message || ''}
+        type={toast?.type}
+        onClose={() => setToast(null)}
       />
     </div>
   );

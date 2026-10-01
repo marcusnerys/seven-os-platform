@@ -74,6 +74,9 @@ export interface Settings {
   businessType: BusinessType;
   /** Segredo do link de assinatura da agenda (migration 0017). */
   agendaToken?: string;
+  /** Controle do dízimo no Financeiro (migration 0019). */
+  dizimoAtivo?: boolean;
+  dizimoPercentual?: number;
 }
 
 export interface Notification {
@@ -378,6 +381,8 @@ export const useStore = create<AppStore>()(
                 currency: data.currency,
                 businessType: (data.business_type ?? 'generic') as BusinessType,
                 agendaToken: data.agenda_token ?? undefined,
+                dizimoAtivo: data.dizimo_ativo ?? true,
+                dizimoPercentual: Number(data.dizimo_percentual ?? 10),
               },
               ...(primeiraLeitura && data.onboarded_at ? {
                 hasOnboarded: true,
@@ -1051,6 +1056,8 @@ export const useStore = create<AppStore>()(
               location: newSettings.location,
               currency: newSettings.currency,
               business_type: newSettings.businessType,
+              dizimo_ativo: newSettings.dizimoAtivo ?? true,
+              dizimo_percentual: newSettings.dizimoPercentual ?? 10,
               theme_accent: themeAccent,
               theme_bg: themeBg,
             });
