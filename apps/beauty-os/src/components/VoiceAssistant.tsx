@@ -513,6 +513,14 @@ export function VoiceAssistant() {
                   ))}
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={() => { stopAssistant(); useStore.getState().setIsAssistantOpen(true); }}
+                className="self-start px-1 py-2 text-[13px] font-semibold text-ios-gold"
+              >
+                Conversar com a IA
+              </button>
             </div>
           </motion.div>
         </motion.div>

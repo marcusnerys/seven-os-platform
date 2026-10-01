@@ -18,6 +18,7 @@ import NewPassword from './screens/NewPassword';
 import BookingPage from './screens/BookingPage';
 import { AutomationService } from './components/AutomationService';
 import { VoiceAssistant } from './components/VoiceAssistant';
+import { AssistantChat } from './components/AssistantChat';
 import { useStore } from './lib/store';
 import { Toast, PWAInstallPrompt } from './components/UI';
 import DevTools from './screens/DevTools';
@@ -130,6 +131,7 @@ export default function App() {
 
         {user && <AutomationService />}
         {user && <VoiceAssistant />}
+        {user && <AssistantChat />}
 
         {/* Theme onboarding — shown to authenticated users who haven't chosen a theme yet */}
         <AnimatePresence>

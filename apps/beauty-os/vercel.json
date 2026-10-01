@@ -24,6 +24,9 @@
   "functions": {
     "api/voice/parse.ts": {
       "maxDuration": 30
+    },
+    "api/assistant/chat.ts": {
+      "maxDuration": 30
     }
   }
 }
