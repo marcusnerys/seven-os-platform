@@ -19,8 +19,10 @@ import {
   Users,
   CalendarDays
 } from 'lucide-react';
-import { cn, dataLocal, escapeICS, fimDoEventoICS, digitosTelefoneBR, formatarTelefoneBR } from '../lib/utils';
+import { cn } from '../lib/utils';
 import { applyTheme } from '../components/ThemeOnboarding';
+import { ImportarContatos } from '../components/ImportarContatos';
+import { SincronizarCalendario } from '../components/SincronizarCalendario';
 
 import { supabase } from '../lib/supabase';
 import { useStore, TAMANHO_MAXIMO_FOTO, ERRO_FORMATO_FOTO } from '../lib/store';
@@ -46,9 +48,6 @@ export default function More() {
   const deleteService = useStore(state => state.deleteService);
   const settings = useStore(state => state.settings);
   const updateSettings = useStore(state => state.updateSettings);
-  const clients = useStore(state => state.clients);
-  const addClient = useStore(state => state.addClient);
-  const appointments = useStore(state => state.appointments);
   
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   
@@ -87,6 +86,8 @@ export default function More() {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isServicesOpen, setIsServicesOpen] = useState(false);
+  const [isContatosOpen, setIsContatosOpen] = useState(false);
+  const [isCalendarioOpen, setIsCalendarioOpen] = useState(false);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [browserUrl, setBrowserUrl] = useState('');
   const setHasOnboarded = useStore(state => state.setHasOnboarded);
@@ -100,87 +101,6 @@ export default function More() {
   // salvo a R$ 0 sem aviso — e a reserva online passava a gravar R$ 0.
   const [newService, setNewService] = useState({ name: '', price: '', duration: 60 });
   const [editSettings, setEditSettings] = useState(settings);
-
-  const importPhoneContacts = async () => {
-    const nav = navigator as any;
-    if (!('contacts' in nav) || !('ContactsManager' in window)) {
-      setToast({ message: 'Sincronização de contatos disponível apenas no navegador móvel (Chrome Android)', type: 'error' });
-      return;
-    }
-    // Um toque de cada vez: a importação grava contato por contato, e um
-    // segundo toque no meio duplicava a lista inteira.
-    if (loadingAction) return;
-    try {
-      // Mesma chave que a lista usa para mostrar o carregamento; com outra,
-      // o spinner nunca aparecia durante dezenas de segundos.
-      setLoadingAction('Importar Contatos do Celular');
-      const picked = await nav.contacts.select(['name', 'tel', 'email'], { multiple: true });
-      if (!picked || picked.length === 0) return;
-      // Compara só os dígitos nacionais. O telefone importado era gravado
-      // cru ("5511999998888") e comparado com o cadastrado à mão, que é
-      // formatado ("(11) 99999-8888"): nunca batiam, e importar a agenda do
-      // celular duplicava todo mundo que já estava cadastrado.
-      const jaCadastrados = new Set(clients.map(cl => digitosTelefoneBR(cl.phone)).filter(Boolean));
-      let added = 0;
-      for (const c of picked) {
-        const name = c.name?.[0] || '';
-        const digitos = digitosTelefoneBR(c.tel?.[0] || '');
-        const email = c.email?.[0] || '';
-        if (!name) continue;
-        if (digitos && jaCadastrados.has(digitos)) continue;
-        // Só formata número nacional completo. Sem DDD ou estrangeiro fica
-        // com os dígitos, como antes: descartar deixava o cliente sem
-        // telefone e a reimportação o duplicava toda vez.
-        const phone = digitos.length === 10 || digitos.length === 11 ? formatarTelefoneBR(digitos) : digitos;
-        await addClient({ name, phone, email, tags: ['Importado'], isVIP: false, isFavorite: false });
-        if (digitos) jaCadastrados.add(digitos);
-        added++;
-      }
-      setToast({ message: added > 0 ? `${added} contato${added > 1 ? 's' : ''} importado${added > 1 ? 's' : ''}` : 'Nenhum contato novo para importar', type: 'success' });
-    } catch (err: any) {
-      if (err?.name !== 'TypeError') {
-        setToast({ message: 'Erro ao importar contatos', type: 'error' });
-      }
-    } finally {
-      setLoadingAction(null);
-    }
-  };
-
-  const exportCalendar = () => {
-    const today = dataLocal();
-    const upcoming = appointments.filter(a => a.date >= today && a.status !== 'Cancelado');
-    if (upcoming.length === 0) {
-      setToast({ message: 'Nenhum agendamento futuro para exportar', type: 'error' });
-      return;
-    }
-    const pad = (n: string) => n.padStart(2, '0');
-    const events = upcoming.map(appt => {
-      const [y, m, d] = appt.date.split('-');
-      const [h, min] = appt.time.split(':');
-      const dtStart = `${y}${pad(m)}${pad(d)}T${pad(h)}${pad(min)}00`;
-      const dtEnd = fimDoEventoICS(appt.date, appt.time, appt.duration || 60);
-      const clientName = appt.clientName || clients.find(c => c.id === appt.clientId)?.name || 'Cliente';
-      return [
-        'BEGIN:VEVENT',
-        `DTSTART:${dtStart}`,
-        `DTEND:${dtEnd}`,
-        `SUMMARY:${escapeICS(appt.service)} - ${escapeICS(clientName)}`,
-        `DESCRIPTION:${escapeICS(vertical.serviceNoun)}: ${escapeICS(appt.service)}\\n${escapeICS(vertical.clientNoun)}: ${escapeICS(clientName)}\\nValor: R$ ${appt.price?.toFixed(2) || '0,00'}`,
-        `STATUS:CONFIRMED`,
-        `UID:${appt.id}@leshanotos`,
-        'END:VEVENT',
-      ].join('\r\n');
-    });
-    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Leshanot OS//Agenda//PT', ...events, 'END:VCALENDAR'].join('\r\n');
-    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `agenda-${today}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setToast({ message: `${upcoming.length} agendamento${upcoming.length > 1 ? 's' : ''} exportado${upcoming.length > 1 ? 's' : ''} para calendário`, type: 'success' });
-  };
 
   // Só ao abrir o modal. Com [settings] como dependência, qualquer
   // releitura das configurações — que acontece ao voltar para o app, quando
@@ -277,8 +197,8 @@ export default function More() {
       title: 'Ferramentas',
       items: [
         ...(vertical.hasScheduling ? [
-          { label: 'Importar Contatos do Celular', icon: Users, color: 'text-ios-cyan', action: importPhoneContacts },
-          { label: 'Exportar Agenda p/ Calendário', icon: CalendarDays, color: 'text-ios-gold', action: exportCalendar, badge: String(appointments.filter(a => a.date >= dataLocal() && a.status !== 'Cancelado').length) },
+          { label: 'Importar Contatos do Celular', icon: Users, color: 'text-ios-cyan', action: () => setIsContatosOpen(true) },
+          { label: 'Ligar Agenda ao Calendário do Celular', icon: CalendarDays, color: 'text-ios-gold', action: () => setIsCalendarioOpen(true) },
         ] : []),
       ]
     },
@@ -387,6 +307,16 @@ export default function More() {
       </div>
       
       <AnimatePresence>
+        {isContatosOpen && (
+          <Modal isOpen={isContatosOpen} onClose={() => setIsContatosOpen(false)} title="Importar contatos">
+            <ImportarContatos aoConcluir={() => setIsContatosOpen(false)} />
+          </Modal>
+        )}
+        {isCalendarioOpen && (
+          <Modal isOpen={isCalendarioOpen} onClose={() => setIsCalendarioOpen(false)} title="Agenda no calendário">
+            <SincronizarCalendario />
+          </Modal>
+        )}
         {isServicesOpen && (
           <Modal 
             isOpen={isServicesOpen} 

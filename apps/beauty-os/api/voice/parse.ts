@@ -209,6 +209,8 @@ Ações Suportadas:
 - send_whatsapp: {clientName}
 - show_financial_summary: {}
 - list_inactive_clients: {}
+- delete_client: {clientName}
+- delete_transaction: {type?: "revenue" | "expense", amount?, description?, date?}
 - unknown: {}
 
 Regras:
@@ -222,6 +224,11 @@ Regras:
 6. 'date' sempre no formato YYYY-MM-DD, nunca por extenso: resolva "hoje",
    "amanhã", "sexta" e similares contra a data de hoje informada acima.
    'time' sempre no formato HH:MM em 24 horas.
+7. Excluir, apagar ou remover um cliente é delete_client. Excluir uma
+   receita, despesa, gasto, venda ou lançamento é delete_transaction, com
+   o que a pessoa disser para identificar (valor, descrição, data). Excluir
+   ou desmarcar um agendamento é cancel_appointment. O aplicativo pede
+   confirmação antes de excluir; em 'message' diga só o que vai ser excluído.
 
 Exemplo. Para "agendar corte para a Maria amanhã às 15h", com hoje sendo
 2026-03-10, a resposta correta é:
@@ -281,6 +288,7 @@ JSON:
       update_client_notes: ['clientName', 'notes'],
       update_client_vip: ['clientName'],
       send_whatsapp: ['clientName'],
+      delete_client: ['clientName'],
     };
 
     const exigidos = OBRIGATORIOS[resultado?.action] ?? [];

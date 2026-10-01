@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { Mic, X, Loader2, Keyboard, Check, AlertCircle, HelpCircle } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { Mic, X, Loader2, Keyboard, Check, AlertCircle, HelpCircle, Trash2 } from 'lucide-react';
+import { cn, EH_IOS } from '../lib/utils';
 import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { useVoiceAssistant, VoiceCommandResult } from '../services/voiceService';
@@ -14,8 +14,6 @@ import { useVoiceAssistant, VoiceCommandResult } from '../services/voiceService'
 const ReconhecimentoDeVoz: any = typeof window !== 'undefined'
   ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
   : undefined;
-const EH_IOS = typeof navigator !== 'undefined' &&
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 const APP_INSTALADO = typeof window !== 'undefined' &&
   (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true);
 const VOZ_DISPONIVEL = !!ReconhecimentoDeVoz && !(EH_IOS && APP_INSTALADO);
@@ -55,6 +53,9 @@ export function VoiceAssistant() {
   // religação apagava a mensagem em menos de um segundo, antes de dar para
   // ler "Assistente ocupado" ou "Sessão expirada".
   const [pausado, setPausado] = useState(false);
+  // Exclusão esperando o toque em "Excluir". Falar ou digitar outro comando
+  // descarta; fechar a folha também.
+  const [confirmacao, setConfirmacao] = useState<{ executar: () => Promise<string> } | null>(null);
   const { parseCommand, executeCommand } = useVoiceAssistant();
 
   // Três exemplos, conforme o tipo de negócio. Tocar num deles preenche o
@@ -95,6 +96,8 @@ export function VoiceAssistant() {
       // A pergunta de complemento ("Faltou o horário...") continua na tela
       // enquanto a pessoa responde.
       setResult(prev => (prev?.status === 'incomplete' ? prev : null));
+      // Voltar a falar desiste da exclusão pendente.
+      setConfirmacao(null);
     };
 
     // Microfone negado, silêncio ou rede: sem este tratamento a tela ficava
@@ -155,6 +158,7 @@ export function VoiceAssistant() {
 
   const handleFinalTranscript = async (text: string) => {
     const geracao = ++geracaoRef.current;
+    setConfirmacao(null);
     setIsProcessing(true);
     const combinedText = lastCommand ? `${lastCommand} ${text}` : text;
 
@@ -189,6 +193,16 @@ export function VoiceAssistant() {
       }
       if (geracao !== geracaoRef.current) return;
 
+      // Exclusão não fecha nem religa o microfone: espera a pessoa decidir.
+      if (resultado?.confirmar) {
+        setResult({ ...res, message: resultado.mensagem, status: 'complete' });
+        setConfirmacao({ executar: resultado.confirmar });
+        setLastCommand('');
+        setIsProcessing(false);
+        setPausado(true);
+        return;
+      }
+
       // Pergunta ("qual Ana?", "qual horário?") mantém a conversa aberta: a
       // resposta, falada ou digitada, é somada ao comando original.
       if (resultado?.pergunta) {
@@ -209,9 +223,33 @@ export function VoiceAssistant() {
     }
   };
 
+  const confirmarExclusao = async () => {
+    if (!confirmacao || isProcessing) return;
+    const geracao = ++geracaoRef.current;
+    const { executar } = confirmacao;
+    setConfirmacao(null);
+    setIsProcessing(true);
+    try {
+      const mensagem = await executar();
+      if (geracao !== geracaoRef.current) return;
+      setResult(atual => atual && { ...atual, message: mensagem });
+    } catch {
+      if (geracao !== geracaoRef.current) return;
+      setResult({ action: 'unknown', message: 'Não consegui excluir. Verifique a internet e tente de novo.', status: 'complete' });
+    }
+    fecharDepois(geracao);
+  };
+
+  const cancelarExclusao = () => {
+    setConfirmacao(null);
+    setResult(atual => atual && { ...atual, message: 'Tudo bem, nada foi excluído.' });
+    fecharDepois(++geracaoRef.current);
+  };
+
   const stopAssistant = () => {
     geracaoRef.current++;
     clearTimeout(fechamentoRef.current);
+    setConfirmacao(null);
     // abort, não stop: stop() entrega o resultado final do que já foi ouvido,
     // e o comando falado era executado depois de a pessoa fechar para
     // desistir dele. Soltar os handlers garante que nada chega depois.
@@ -256,6 +294,8 @@ export function VoiceAssistant() {
   // Uma frase só diz o estado da conversa.
   const estado = isProcessing
     ? 'Entendendo...'
+    : confirmacao
+      ? 'Confirme a exclusão'
     : isListening
       ? 'Ouvindo...'
       : result?.status === 'incomplete'
@@ -266,6 +306,7 @@ export function VoiceAssistant() {
 
   const falado = interim || transcript;
   const tipoResultado = !result ? null
+    : confirmacao ? 'confirmar'
     : result.action === 'unknown' ? 'erro'
     : result.status === 'incomplete' ? 'pergunta'
     : 'feito';
@@ -403,14 +444,33 @@ export function VoiceAssistant() {
                     <span className={cn(
                       'self-start flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider',
                       tipoResultado === 'erro' && 'bg-red-600 text-white',
-                      tipoResultado === 'pergunta' && 'bg-amber-400 text-[#111214]',
+                      (tipoResultado === 'pergunta' || tipoResultado === 'confirmar') && 'bg-amber-400 text-[#111214]',
                       tipoResultado === 'feito' && 'bg-emerald-700 text-white'
                     )}>
                       {tipoResultado === 'erro' && <><AlertCircle size={13} /> Não deu certo</>}
                       {tipoResultado === 'pergunta' && <><HelpCircle size={13} /> Falta um detalhe</>}
                       {tipoResultado === 'feito' && <><Check size={13} /> Feito</>}
+                      {tipoResultado === 'confirmar' && <><Trash2 size={13} /> Confirme</>}
                     </span>
                     <p className="text-[16px] font-semibold text-ios-text-primary leading-snug">{result.message}</p>
+                    {confirmacao && (
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={cancelarExclusao}
+                          className="flex-1 h-12 rounded-xl border border-ios-border text-ios-text-primary text-[15px] font-semibold"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmarExclusao}
+                          className="flex-1 h-12 rounded-xl bg-red-600 text-white text-[15px] font-bold flex items-center justify-center gap-2"
+                        >
+                          <Trash2 size={17} /> Excluir
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
