@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -11,10 +14,14 @@
     "check:ocr": "esbuild src/lib/ocr.ts --bundle --format=esm --outfile=node_modules/.tmp/ocr.mjs --log-level=error && node scripts/check-ocr.mjs",
     "check:ics": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-ics.mjs",
     "check:slots": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-slots.mjs",
-    "check": "npm run check:ocr && npm run check:ics && npm run check:slots && npm run check:helpers",
-    "check:helpers": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-helpers.mjs"
+    "check": "npm run check:ocr && npm run check:ics && npm run check:slots && npm run check:helpers && npm run check:agent && npm run check:chat",
+    "check:helpers": "esbuild src/lib/utils.ts --bundle --format=esm --outfile=node_modules/.tmp/utils.mjs --log-level=error && node scripts/check-helpers.mjs",
+    "check:agent": "esbuild api/_lib/assistant-tools.ts --bundle --format=esm --outfile=node_modules/.tmp/assistant-tools.mjs --log-level=error && node scripts/check-agent.mjs",
+    "check:chat": "node scripts/check-chat.mjs"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "0.99.1",
+    "@earendil-works/pi-ai": "0.99.1",
     "@google/genai": "^1.29.0",
     "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/vite": "^4.1.14",

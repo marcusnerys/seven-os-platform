@@ -185,6 +185,7 @@ interface AppStore {
   modalData: any | null;
   toast: { message: string, type: 'success' | 'error' } | null;
   isVoiceActive: boolean;
+  isAssistantOpen: boolean;
   /** True enquanto o usuário veio de um link de recuperação e ainda não definiu a senha nova. */
   isRecoveringPassword: boolean;
 
@@ -202,6 +203,7 @@ interface AppStore {
   setModalToOpen: (modal: 'appointment' | 'client' | 'revenue' | 'expense' | null, data?: any) => void;
   setToast: (toast: { message: string, type: 'success' | 'error' } | null) => void;
   setIsVoiceActive: (active: boolean) => void;
+  setIsAssistantOpen: (open: boolean) => void;
   setIsRecoveringPassword: (v: boolean) => void;
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
@@ -452,6 +454,7 @@ export const useStore = create<AppStore>()(
         showDevTools: false,
         setShowDevTools: (show) => set({ showDevTools: show }),
         isVoiceActive: false,
+        isAssistantOpen: false,
         isRecoveringPassword: false,
         themeAccent: '#D4AF37',
         themeBg: 'dark',
@@ -486,6 +489,7 @@ export const useStore = create<AppStore>()(
         },
         setToast: (toast) => set({ toast }),
         setIsVoiceActive: (active) => set({ isVoiceActive: active }),
+        setIsAssistantOpen: (open) => set({ isAssistantOpen: open }),
         setIsRecoveringPassword: (v) => set({ isRecoveringPassword: v }),
 
         setActiveTab: (tab) => set({ activeTab: tab }),
