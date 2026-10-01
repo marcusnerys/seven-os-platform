@@ -162,7 +162,7 @@ export const useImportacoes = create<Estado>((set, get) => {
 
   return {
     itens: [],
-    painel: 'aberto',
+    painel: 'minimizado',
     revisar: false,
 
     enviar: (files) => {
@@ -177,7 +177,7 @@ export const useImportacoes = create<Estado>((set, get) => {
         criadoEm: Date.now(),
         imagem: file.type.startsWith('image/'),
       }));
-      set(s => ({ itens: [...novos, ...s.itens], painel: 'aberto' }));
+      set(s => ({ itens: [...novos, ...s.itens] }));
       novos.forEach((item, i) => {
         if (item.status !== 'enviando') return;
         arquivos.set(item.id, files[i]);
@@ -239,7 +239,7 @@ export const useImportacoes = create<Estado>((set, get) => {
       arquivos.clear();
       offline.clear();
       fila.length = 0;
-      set({ itens: [], revisar: false, painel: 'aberto' });
+      set({ itens: [], revisar: false, painel: 'minimizado' });
     },
   };
 });

@@ -12,10 +12,11 @@ const minutos = (ms: number) => {
 };
 
 /**
- * Painel das leituras de extrato. Aberto, mostra cada arquivo com a etapa em
- * que está; minimizado, vira uma pílula acima da barra inferior e a pessoa
- * segue usando o app. A leitura acontece no servidor: fechar o app e voltar
- * não perde nada.
+ * Painel das leituras de extrato: uma pílula no canto, acima da barra
+ * inferior, com o progresso; tocando nela, os detalhes de cada arquivo. Nunca
+ * cobre a tela — a primeira versão abria por cima de tudo com fundo escuro e
+ * a pessoa não conseguia usar o app enquanto lia. A leitura acontece no
+ * servidor: fechar o app e voltar não perde nada.
  */
 export function PainelImportacao() {
   const userId = useStore(state => state.user?.id);
@@ -67,117 +68,105 @@ export function PainelImportacao() {
   };
 
   const encontradasAgora = andamento.reduce((n, i) => n + Math.max(0, i.encontradas), 0);
+  const comErro = itens.some(i => i.status === 'erro');
+  const aberto = painel === 'aberto';
+  // Progresso médio do que ainda está subindo, para a faixa da pílula.
+  const enviando = itens.filter(i => i.status === 'enviando');
+  const envioMedio = enviando.length ? enviando.reduce((n, i) => n + i.enviado, 0) / enviando.length : 0;
 
+  // Nada aqui cobre a tela nem bloqueia toques: a pílula fica no canto
+  // esquerdo, acima da barra (os botões "+" das telas ficam à direita), e
+  // os detalhes abrem num cartão por cima dela, sem fundo escurecido.
   return (
-    <AnimatePresence mode="wait">
-      {painel === 'minimizado' ? (
-        <motion.button
-          key="pilula"
-          type="button"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          onClick={() => (andamento.length || !prontos.length ? setPainel('aberto') : revisar())}
-          className={cn(
-            'fixed left-1/2 -translate-x-1/2 z-[90] bottom-[calc(env(safe-area-inset-bottom)+124px)] max-w-[calc(100vw-32px)]',
-            'flex items-center gap-2.5 h-11 pl-3 pr-4 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.35)] border text-[13px] font-semibold',
-            andamento.length
-              ? 'bg-ios-surface border-ios-border text-ios-text-primary'
-              : prontos.length
-                ? 'bg-emerald-700 border-emerald-600 text-white'
-                : 'bg-red-600 border-red-500 text-white'
-          )}
-        >
-          {andamento.length ? <Loader2 size={17} className="animate-spin text-ios-gold shrink-0" />
-            : prontos.length ? <Check size={17} className="shrink-0" /> : <AlertCircle size={17} className="shrink-0" />}
-          <span className="truncate">
-            {andamento.length
-              ? `Lendo ${andamento.length} extrato${andamento.length > 1 ? 's' : ''}${encontradasAgora ? ` · ${encontradasAgora} encontrados` : ''}`
-              : prontos.length
-                ? `Pronto · ${lancamentosProntos} lançamentos · Revisar`
-                : 'A leitura não deu certo · Ver'}
-          </span>
-        </motion.button>
-      ) : (
-        <motion.div key="painel" className="fixed inset-0 z-[95]" initial={{ opacity: 1 }} exit={{ opacity: 1 }}>
+    <div className="fixed left-4 z-[90] bottom-[calc(env(safe-area-inset-bottom)+140px)] w-[min(340px,calc(100vw-104px))] flex flex-col items-start gap-2 pointer-events-none">
+      <AnimatePresence>
+        {aberto && (
           <motion.div
-            aria-hidden
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setPainel('minimizado')}
-            className="absolute inset-0 bg-black/40"
-          />
-          <motion.div
-            role="dialog"
-            aria-modal="true"
+            key="detalhes"
+            role="region"
             aria-label="Leitura de extratos"
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 32, stiffness: 340 }}
-            className="absolute inset-x-0 bottom-0 max-h-[80dvh] flex flex-col rounded-t-[28px] bg-ios-surface border-t border-ios-border shadow-[0_-12px_40px_rgba(0,0,0,0.35)]"
+            initial={{ opacity: 0, y: 12, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.97 }}
+            transition={{ duration: 0.18 }}
+            className="pointer-events-auto w-[calc(100vw-32px)] max-w-[400px] max-h-[48dvh] flex flex-col rounded-3xl bg-ios-surface border border-ios-border shadow-[0_12px_40px_rgba(0,0,0,0.45)] origin-bottom-left"
           >
-            <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3">
-              <div>
-                <p className="text-[17px] font-bold text-ios-text-primary">
-                  {andamento.length ? 'Lendo extratos' : prontos.length ? 'Extratos prontos' : 'Leitura de extratos'}
-                </p>
-                <p className="text-[13px] text-ios-text-secondary">
-                  {andamento.length ? 'Pode continuar usando o app: a leitura segue sozinha.' : `${itens.length} arquivo${itens.length > 1 ? 's' : ''}`}
-                </p>
-              </div>
+            <div className="shrink-0 flex items-center justify-between pl-4 pr-2 pt-3 pb-2">
+              <p className="text-[15px] font-bold text-ios-text-primary">
+                {andamento.length ? 'Lendo extratos' : prontos.length ? 'Extratos prontos' : 'Leitura de extratos'}
+              </p>
               <button
                 onClick={() => setPainel('minimizado')}
-                aria-label="Minimizar"
-                className="w-11 h-11 rounded-full bg-ios-text-secondary/10 text-ios-text-secondary flex items-center justify-center"
+                aria-label="Recolher"
+                className="w-10 h-10 rounded-full text-ios-text-secondary flex items-center justify-center"
               >
-                <ChevronDown size={22} />
+                <ChevronDown size={20} />
               </button>
             </div>
 
-            <ul className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 flex flex-col gap-2.5">
+            <ul className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 flex flex-col gap-2">
               {itens.map(item => (
                 <LinhaImportacao key={item.id} item={item} aoRemover={() => descartar([item.id])} aoLerOffline={() => lerOffline(item.id)} />
               ))}
             </ul>
 
-            <div className="shrink-0 px-5 pt-4 pb-[calc(env(safe-area-inset-bottom)+20px)] flex flex-col gap-2">
+            <div className="shrink-0 p-3 flex gap-2">
               {prontos.length > 0 && (
                 <button
                   type="button"
                   onClick={revisar}
-                  className="h-12 rounded-2xl bg-ios-gold text-[#111214] text-[15px] font-bold"
+                  className="flex-1 h-11 rounded-2xl bg-ios-gold text-[#111214] text-[14px] font-bold"
                 >
                   Revisar {lancamentosProntos} lançamento{lancamentosProntos === 1 ? '' : 's'}
-                </button>
-              )}
-              {andamento.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setPainel('minimizado')}
-                  className={cn(
-                    'h-12 rounded-2xl text-[15px] font-semibold',
-                    prontos.length ? 'border border-ios-border text-ios-text-primary' : 'bg-ios-gold text-[#111214] font-bold'
-                  )}
-                >
-                  Continuar usando o app
                 </button>
               )}
               {!andamento.length && !prontos.length && (
                 <button
                   type="button"
                   onClick={() => descartar(itens.map(i => i.id))}
-                  className="h-12 rounded-2xl border border-ios-border text-ios-text-primary text-[15px] font-semibold"
+                  className="flex-1 h-11 rounded-2xl border border-ios-border text-ios-text-primary text-[14px] font-semibold"
                 >
                   Fechar
                 </button>
               )}
             </div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+
+      <motion.button
+        type="button"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        // Tudo pronto e sem erro: o toque já leva à revisão. Nos outros
+        // casos abre e fecha os detalhes.
+        onClick={() => (!andamento.length && prontos.length && !comErro ? revisar() : setPainel(aberto ? 'minimizado' : 'aberto'))}
+        aria-expanded={aberto}
+        className={cn(
+          'pointer-events-auto relative overflow-hidden max-w-full flex items-center gap-2 h-10 pl-3 pr-3.5 rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.35)] border text-[13px] font-semibold',
+          andamento.length
+            ? 'bg-ios-surface border-ios-border text-ios-text-primary'
+            : prontos.length
+              ? 'bg-emerald-700 border-emerald-600 text-white'
+              : 'bg-red-600 border-red-500 text-white'
+        )}
+      >
+        {andamento.length ? <Loader2 size={16} className="animate-spin text-ios-gold shrink-0" />
+          : prontos.length ? <Check size={16} className="shrink-0" /> : <AlertCircle size={16} className="shrink-0" />}
+        <span className="truncate">
+          {enviando.length
+            ? `Enviando ${Math.round(envioMedio * 100)}%`
+            : andamento.length
+              ? `Lendo${andamento.length > 1 ? ` ${andamento.length}` : ''}${encontradasAgora ? ` · ${encontradasAgora} encontrados` : '...'}`
+              : prontos.length
+                ? `${lancamentosProntos} lançamentos · Revisar`
+                : 'Não deu certo · Ver'}
+        </span>
+        {enviando.length > 0 && (
+          <span aria-hidden className="absolute left-0 bottom-0 h-[3px] bg-ios-gold transition-all duration-300" style={{ width: `${envioMedio * 100}%` }} />
+        )}
+      </motion.button>
+    </div>
   );
 }
 
