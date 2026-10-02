@@ -224,7 +224,8 @@ reiniciar();
 process.env.GROQ_API_KEY = 'groq-teste';
 reiniciar();
 assert.equal((await post(pergunta())).statusCode, 503);
-assert.ok(chamou('api.groq.com'), 'reserva do Groq acionada');
+assert.ok(chamou('api.groq.com'), 'Groq acionado');
+assert.ok(chamadas.findIndex(c => c.url.includes('api.groq.com')) < chamadas.findIndex(c => c.url.includes('generativelanguage')), 'Groq vem antes do Gemini');
 assert.match(chamadas.find(c => c.url.includes('api.groq.com')).body, /"reasoning_effort":"low"/, 'gpt-oss com raciocínio baixo');
 delete process.env.GROQ_API_KEY;
 

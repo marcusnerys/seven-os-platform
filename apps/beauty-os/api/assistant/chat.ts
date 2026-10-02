@@ -333,7 +333,7 @@ function escolherModelo(provedor: Provedor): Model<Api> | undefined {
   return provedor === 'google'
     // Flash-Lite primeiro, como a voz (#22): no plano gratuito o gemini-flash-latest esgota a cota diária em ~20 chamadas.
     ? models.getModel('google', 'gemini-flash-lite-latest') ?? models.getModel('google', 'gemini-flash-latest')
-    : models.getModel('groq', 'openai/gpt-oss-120b') ?? models.getModel('groq', 'llama-3.3-70b-versatile');
+    : models.getModel('groq', 'openai/gpt-oss-120b') ?? models.getModel('groq', 'openai/gpt-oss-20b');
 }
 
 function paraHistorico(mensagens: Mensagem[], modelo: Model<Api>): AgentMessage[] {
@@ -403,7 +403,8 @@ async function conversar(
     ? [ferramentaFinanceiro(dados)]
     : [ferramentaFinanceiro(dados), ferramentaInativas(dados, hoje), ferramentaAgenda(dados), ferramentaCampanha(dados, hoje, textoDoDono, guardar)];
   const prompt = montarPrompt(negocio, hoje);
-  const provedores = (['google', 'groq'] as const).filter(p => chaves[p]);
+  // Groq primeiro: o contrato proíbe treinar com os dados; o Gemini gratuito pode usá-los (sem exceção para o Brasil).
+  const provedores = (['groq', 'google'] as const).filter(p => chaves[p]);
 
   for (const [i, provedor] of provedores.entries()) {
     const restante = prazoFinal - Date.now();
