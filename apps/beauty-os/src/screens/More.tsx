@@ -23,6 +23,7 @@ import { cn } from '../lib/utils';
 import { applyTheme } from '../components/ThemeOnboarding';
 import { ImportarContatos } from '../components/ImportarContatos';
 import { SincronizarCalendario } from '../components/SincronizarCalendario';
+import { GoogleAgenda } from '../components/GoogleAgenda';
 
 import { supabase } from '../lib/supabase';
 import { useStore, TAMANHO_MAXIMO_FOTO, ERRO_FORMATO_FOTO } from '../lib/store';
@@ -300,7 +301,7 @@ export default function More() {
               Sair da conta
             </Button>
             <p className="text-center text-[10px] text-ios-text-secondary mt-6 font-medium tracking-widest uppercase opacity-40">
-              {settings.studioName || 'Leshanot OS'} · v2.4.1
+              {settings.studioName || 'Leshanot OS'} · v3.0.0
             </p>
           </div>
         </div>
@@ -314,7 +315,16 @@ export default function More() {
         )}
         {isCalendarioOpen && (
           <Modal isOpen={isCalendarioOpen} onClose={() => setIsCalendarioOpen(false)} title="Agenda no calendário">
-            <SincronizarCalendario />
+            <div className="flex flex-col gap-6">
+              <section className="flex flex-col gap-3">
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-ios-text-secondary px-1">Google Agenda · atualiza na hora</h3>
+                <GoogleAgenda />
+              </section>
+              <section className="flex flex-col gap-3">
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-ios-text-secondary px-1">Ou assinar por link · iPhone e outros</h3>
+                <SincronizarCalendario />
+              </section>
+            </div>
           </Modal>
         )}
         {isServicesOpen && (

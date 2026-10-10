@@ -6,6 +6,7 @@ import { cn } from '../lib/utils';
 import { BUSINESS_TYPES, VERTICALS, type BusinessType } from '../lib/vertical';
 import { ImportarContatos } from './ImportarContatos';
 import { SincronizarCalendario } from './SincronizarCalendario';
+import { GoogleAgenda } from './GoogleAgenda';
 
 const ACCENT_COLORS = [
   { name: 'Dourado', value: '#D4AF37', neon: '#F5D062', label: 'Clássico' },
@@ -467,6 +468,7 @@ export function Onboarding() {
                 <h2 className="text-[11px] font-bold uppercase tracking-widest px-1" style={{ color: textSecondary }}>
                   Calendário do celular
                 </h2>
+                <GoogleAgenda />
                 <SincronizarCalendario />
               </section>
             </motion.div>

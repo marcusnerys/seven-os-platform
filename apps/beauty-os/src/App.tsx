@@ -20,6 +20,7 @@ import { AutomationService } from './components/AutomationService';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import { PainelImportacao } from './components/PainelImportacao';
 import { SincronizarFinanceiro } from './components/financeiro/SincronizarFinanceiro';
+import { avisoDaVoltaDoGoogle } from './components/GoogleAgenda';
 import { useStore } from './lib/store';
 import { Toast, PWAInstallPrompt } from './components/UI';
 import DevTools from './screens/DevTools';
@@ -51,6 +52,12 @@ export default function App() {
   useEffect(() => {
     applyTheme(themeAccent, themeBg);
   }, [themeAccent, themeBg]);
+
+  // Volta do login Google (?google=conectado|erro|...): avisa uma vez.
+  useEffect(() => {
+    const aviso = avisoDaVoltaDoGoogle();
+    if (aviso) setToast(aviso);
+  }, []);
 
   // Verticais sem agendamento (ex: financas pessoais) nao tem aba Agenda.
   useEffect(() => {
