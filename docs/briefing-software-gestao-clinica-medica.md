@@ -32,11 +32,34 @@ cima. O nosso será um **assistente que opera a clínica**, onde o cadastro em t
 | **Amigo Tech** | Ecossistema financeiro-clínico | Amigo Pay, Open Finance + "Magic Match", transcrição por IA, app Amigo One | Sem TISS explícito; foco financeiro |
 | **ConTotal (Saúde)** | ERP de saúde | Estoque, BI, repasses de convênio | Sem telemedicina, sem TISS, sem preços |
 | **MedConsulting/MedIA** | Consultoria + IA | Discurso de automação (faltas de ~30% → <10%) | É consultoria, não produto SaaS puro |
+| **Codental** (odonto) | Gestão odontológica acessível e transparente | **Preços públicos** (R$ 89,90–179,90/mês), migração/treinamento grátis, sem fidelidade; parceiros OpenAI, Memed, Asaas, Meta | Foco em odontologia; sem TISS/convênio médico, sem telessaúde; cobra por uso (WhatsApp/NF) |
 
-**Padrão do mercado:** quase ninguém publica preço (todos pedem "demonstração");
-a IA é vendida como diferencial, mas quase sempre limitada a transcrição e
-agendamento. **Transparência de preço + IA operacional de verdade** são brechas
-claras.
+**Padrão do mercado:** quase ninguém publica preço (todos pedem "demonstração")
+— **o Codental é a exceção e prova que dá pra ser transparente**; a IA é vendida
+como diferencial, mas quase sempre limitada a transcrição e agendamento.
+**Transparência de preço + IA operacional de verdade** continuam sendo as brechas
+mais claras.
+
+**Insights específicos do Codental (referência mais próxima do nosso produto):**
+- **Preço público e baixo** (R$ 89,90 Essencial → R$ 179,90 Avançado/mês), anual
+  com 10% off. Define a **âncora de preço** da faixa de entrada.
+- **Cobrança por uso** além da mensalidade: confirmação WhatsApp **R$ 0,07/msg** e
+  NF **a partir de R$ 0,19**. Modelo a considerar (ou a combater com "tudo incluso").
+- **Módulos odonto-específicos:** "Agenda odontológica", "Prontuário odontológico"
+  com **odontograma**, "Anamnese inteligente" (paciente preenche pelo celular),
+  "Controle de prótese", "Gestão de comissões". → reforça a tese do **motor de
+  templates por especialidade** (odonto é só mais uma especialidade pra nós).
+- **WhatsApp:** "Codental Connect" é uma **extensão para WhatsApp Web** (agenda e
+  cadastra sem sair do WhatsApp) — prático, mas inferior a um **agente Cloud API
+  bidirecional**, que é a nossa aposta.
+- **IA:** "Transcrição de evolução clínica com IA" e "prescrições inteligentes"
+  (parceria **OpenAI**). Mesmo padrão dos outros: IA limitada a transcrição.
+- **"Codental cobranças"** (Pix/boleto/cartão com baixa automática) e **NF
+  integrada** via parceiro **Asaas**; prescrição via **Memed**. → confirma a
+  estratégia de **camada de conectores** em vez de construir tudo.
+- **Diferenciais comerciais:** migração de dados grátis, treinamento grátis, sem
+  contrato de fidelidade, "suporte com gente de verdade". → **tabela de aposta
+  mínima** que o nosso go-to-market precisa cobrir.
 
 ---
 
@@ -44,27 +67,27 @@ claras.
 
 Recursos presentes na maioria dos concorrentes — **mesa de entrada obrigatória**:
 
-| Módulo | GestãoDS | Amplimed | Amigo | ConTotal | Prioridade MVP |
-|--------|:--------:|:--------:|:-----:|:--------:|:--------------:|
-| Agendamento online + presencial | ✅ | ✅ | ✅ | ✅ | **P0** |
-| Confirmação/lembrete (WhatsApp/SMS/e-mail) | ✅ | ✅ | ✅ | ✅ | **P0** |
-| Prontuário eletrônico (PEP) | ✅ | ✅ | ✅ | ✅ | **P0** |
-| Prescrição digital | ✅ | ✅ | ✅ | ⚠️ | **P0** |
-| Financeiro (fluxo de caixa, contas) | ✅ | ✅ | ✅ | ✅ | **P0** |
-| Telemedicina / teleconsulta | ✅ | ✅ | ✅ | ❌ | **P1** |
-| Faturamento TISS (convênios) | ⚠️ | ✅ | ⚠️ | ⚠️ | **P1** |
-| NFS-e | ⚠️ | ✅ | ✅ | ❌ | **P1** |
-| Repasses a profissionais | ⚠️ | ✅ | ✅ | ✅ | **P1** |
-| Pagamentos (PIX/boleto/cartão) | ⚠️ | ✅ | ✅ | ⚠️ | **P1** |
-| Estoque de insumos/medicamentos | ⚠️ | ✅ | ⚠️ | ✅ | **P2** |
-| Relatórios / BI | ✅ | ✅ | ✅ | ✅ | **P1** |
-| Marketing / campanhas / recall | ✅ | ✅ | ✅ | ⚠️ | **P2** |
-| Transcrição de consulta por IA | ❌ | ✅ | ✅ | ❌ | **P0 (diferencial)** |
-| Copiloto clínico por IA | ⚠️ | ✅ | ✅ | ❌ | **P1 (diferencial)** |
-| App mobile | ✅ | ✅ | ✅ | ⚠️ | **P2** |
-| Pesquisa de satisfação (NPS) | ⚠️ | ✅ | ⚠️ | ✅ | **P2** |
-| Lista de espera / encaixe inteligente | ⚠️ | ⚠️ | ✅ | ❌ | **P1** |
-| Conciliação bancária / Open Finance | ❌ | ⚠️ | ✅ | ⚠️ | **P2** |
+| Módulo | GestãoDS | Amplimed | Amigo | ConTotal | Codental | Prioridade MVP |
+|--------|:--------:|:--------:|:-----:|:--------:|:--------:|:--------------:|
+| Agendamento online + presencial | ✅ | ✅ | ✅ | ✅ | ✅ | **P0** |
+| Confirmação/lembrete (WhatsApp/SMS/e-mail) | ✅ | ✅ | ✅ | ✅ | ✅ | **P0** |
+| Prontuário eletrônico (PEP) | ✅ | ✅ | ✅ | ✅ | ✅ (odontograma) | **P0** |
+| Prescrição digital | ✅ | ✅ | ✅ | ⚠️ | ✅ (Memed) | **P0** |
+| Financeiro (fluxo de caixa, contas) | ✅ | ✅ | ✅ | ✅ | ✅ | **P0** |
+| Telemedicina / teleconsulta | ✅ | ✅ | ✅ | ❌ | ❌ | **P1** |
+| Faturamento TISS (convênios) | ⚠️ | ✅ | ⚠️ | ⚠️ | ❌ | **P1** |
+| NFS-e | ⚠️ | ✅ | ✅ | ❌ | ✅ | **P1** |
+| Repasses a profissionais | ⚠️ | ✅ | ✅ | ✅ | ✅ (comissões) | **P1** |
+| Pagamentos (PIX/boleto/cartão) | ⚠️ | ✅ | ✅ | ⚠️ | ✅ (Asaas) | **P1** |
+| Estoque de insumos/medicamentos | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | **P2** |
+| Relatórios / BI | ✅ | ✅ | ✅ | ✅ | ✅ | **P1** |
+| Marketing / campanhas / recall | ✅ | ✅ | ✅ | ⚠️ | ✅ | **P2** |
+| Transcrição de consulta por IA | ❌ | ✅ | ✅ | ❌ | ✅ (OpenAI) | **P0 (diferencial)** |
+| Copiloto clínico por IA | ⚠️ | ✅ | ✅ | ❌ | ⚠️ | **P1 (diferencial)** |
+| App mobile | ✅ | ✅ | ✅ | ⚠️ | ✅ | **P2** |
+| Pesquisa de satisfação (NPS) | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | **P2** |
+| Lista de espera / encaixe inteligente | ⚠️ | ⚠️ | ✅ | ❌ | ⚠️ | **P1** |
+| Conciliação bancária / Open Finance | ❌ | ⚠️ | ✅ | ⚠️ | ❌ | **P2** |
 
 Legenda: ✅ tem · ⚠️ parcial/complemento pago · ❌ não encontrado.
 
