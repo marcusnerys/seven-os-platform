@@ -18,6 +18,7 @@ import NewPassword from './screens/NewPassword';
 import BookingPage from './screens/BookingPage';
 import { AutomationService } from './components/AutomationService';
 import { VoiceAssistant } from './components/VoiceAssistant';
+import { AssistantChat } from './components/AssistantChat';
 import { PainelImportacao } from './components/PainelImportacao';
 import { SincronizarFinanceiro } from './components/financeiro/SincronizarFinanceiro';
 import { avisoDaVoltaDoGoogle } from './components/GoogleAgenda';
@@ -139,6 +140,7 @@ export default function App() {
 
         {user && <AutomationService />}
         {user && <VoiceAssistant />}
+        {user && <AssistantChat />}
         {user && <PainelImportacao />}
         {user && <SincronizarFinanceiro />}
 

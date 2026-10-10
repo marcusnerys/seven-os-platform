@@ -13,6 +13,7 @@ import { useWeather } from '../hooks/useWeather';
 export default function Dashboard() {
   const { setActiveTab, setModalToOpen, updateUserAvatar, getRevenueData, getRevenueForecast, getSmartInsight, clients, appointments, transactions, user, notifications, markNotificationAsRead, automationTemplates, setShowDevTools, settings } = useStore();
   const themeBg = useStore(state => state.themeBg);
+  const setIsAssistantOpen = useStore(state => state.setIsAssistantOpen);
   // Esta tela era a única que ignorava a vertical: falava sempre em cliente e
   // agendamento. Em Finanças Pessoais a navegação já esconde Agenda e
   // Clientes, mas o início continuava oferecendo os dois — e os atalhos
@@ -439,6 +440,23 @@ export default function Dashboard() {
           </GlassCard>
         ))}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setIsAssistantOpen(true)}
+        className="w-full shrink-0 p-4 rounded-ios bg-ios-surface border border-ios-border flex items-center gap-3 text-left active:scale-[0.98] transition-transform"
+      >
+        <span className="w-11 h-11 shrink-0 rounded-2xl bg-ios-gold/10 border border-ios-gold/20 text-ios-gold flex items-center justify-center">
+          <Sparkles size={20} />
+        </span>
+        <span className="flex-1 min-w-0 flex flex-col">
+          <span className="text-[15px] font-bold text-ios-text-primary">Perguntar à IA</span>
+          <span className="text-[12px] text-ios-text-secondary leading-snug">
+            {agenda ? `Faturamento, ${vertical.clientNounPlural.toLowerCase()} e campanhas` : 'Gastos, receitas e resumo do mês'}
+          </span>
+        </span>
+        <ChevronRight size={18} className="shrink-0 text-ios-text-secondary" />
+      </button>
 
       {/* Quick Actions */}
       <div className="flex flex-col gap-3">
