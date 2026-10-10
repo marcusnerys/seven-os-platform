@@ -33,6 +33,10 @@ cima. O nosso será um **assistente que opera a clínica**, onde o cadastro em t
 | **ConTotal (Saúde)** | ERP de saúde | Estoque, BI, repasses de convênio | Sem telemedicina, sem TISS, sem preços |
 | **MedConsulting/MedIA** | Consultoria + IA | Discurso de automação (faltas de ~30% → <10%) | É consultoria, não produto SaaS puro |
 | **Codental** (odonto) | Gestão odontológica acessível e transparente | **Preços públicos** (R$ 89,90–179,90/mês), migração/treinamento grátis, sem fidelidade; parceiros OpenAI, Memed, Asaas, Meta | Foco em odontologia; sem TISS/convênio médico, sem telessaúde; cobra por uso (WhatsApp/NF) |
+| **Mediccos** (categoria diferente) | **Assistente de IA para análise de documentos** e apoio à decisão clínica — *ferramenta-ponto, não ERP de gestão* | IA focada: análise de exames/documentos, criação de documentos médicos, apoio ao diagnóstico | Não é gestão de clínica (sem agenda/financeiro/TISS); é copiloto avulso |
+
+> Nota: a landing do Mediccos é um SPA (só o título indexou), então a análise
+> acima vem do título oficial + buscas. Confirmar recursos/preços com prints.
 
 **Padrão do mercado:** quase ninguém publica preço (todos pedem "demonstração")
 — **o Codental é a exceção e prova que dá pra ser transparente**; a IA é vendida
@@ -60,6 +64,26 @@ mais claras.
 - **Diferenciais comerciais:** migração de dados grátis, treinamento grátis, sem
   contrato de fidelidade, "suporte com gente de verdade". → **tabela de aposta
   mínima** que o nosso go-to-market precisa cobrir.
+
+> **🦷 Decisão incorporada — Codental como "molde" da especialidade Odontologia.**
+> Como nosso produto é multi-especialidade, a odontologia é só mais uma vertical
+> do **motor de templates**. O Codental nos entrega o **escopo pré-moldado** dessa
+> especialidade — já sabemos a rota: **odontograma**, **anamnese pelo celular**,
+> **controle de prótese/laboratório**, **comissões por dentista**, categorização
+> de pacientes por etiqueta. Em vez de descobrir do zero o que uma clínica
+> odontológica precisa, **copiamos esse molde** como o template de odonto do dia 1.
+> Isso **de-risca** a especialidade e vira um dos **templates-semente** entregues
+> no lançamento (ao lado das especialidades médicas que você definir).
+
+**Insight do Mediccos (valida nossa aposta de IA):**
+- É uma **ferramenta-ponto de IA** (análise de documentos/exames + apoio à decisão),
+  **não** um sistema de gestão. Prova que existe **demanda real** pela camada de IA
+  clínica que estamos propondo.
+- **Nossa vantagem:** eles vendem a IA **solta**; nós embutimos essa inteligência
+  **dentro do sistema que opera a clínica** (scribe + anti-glosa + decisão no mesmo
+  fluxo do prontuário). IA acoplada ao workflow > IA avulsa.
+- Reforça o diferencial **P0/P1** do PRD: scribe que gera o prontuário + copiloto
+  clínico — exatamente onde os ERPs de gestão ainda são fracos.
 
 ---
 
