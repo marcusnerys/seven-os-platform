@@ -301,7 +301,7 @@ export default function More() {
               Sair da conta
             </Button>
             <p className="text-center text-[10px] text-ios-text-secondary mt-6 font-medium tracking-widest uppercase opacity-40">
-              {settings.studioName || 'Leshanot OS'} · v3.0.0
+              {settings.studioName || 'Leshanot OS'} · v3.1.0
             </p>
           </div>
         </div>
