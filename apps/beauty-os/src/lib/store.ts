@@ -194,6 +194,9 @@ interface AppStore {
   modalData: any | null;
   toast: { message: string, type: 'success' | 'error' } | null;
   isVoiceActive: boolean;
+  /** Cobrança pedida pela voz, esperando a pessoa conferir e tocar em Enviar. */
+  cobrancaPendente: { cliente: { name: string; phone: string }; valor: number } | null;
+  setCobrancaPendente: (c: { cliente: { name: string; phone: string }; valor: number } | null) => void;
   /** True enquanto o usuário veio de um link de recuperação e ainda não definiu a senha nova. */
   isRecoveringPassword: boolean;
 
@@ -486,6 +489,8 @@ export const useStore = create<AppStore>()(
         showDevTools: false,
         setShowDevTools: (show) => set({ showDevTools: show }),
         isVoiceActive: false,
+        cobrancaPendente: null,
+        setCobrancaPendente: (c) => set({ cobrancaPendente: c }),
         isRecoveringPassword: false,
         themeAccent: '#D4AF37',
         themeBg: 'dark',

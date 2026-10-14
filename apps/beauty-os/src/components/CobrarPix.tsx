@@ -1,23 +1,20 @@
 import * as React from 'react';
 import { Copy, Send } from 'lucide-react';
 import { useStore } from '../lib/store';
-import { codigoPix, chavePixValida } from '../lib/pix';
+import { codigoPix, chavePixValida, lerValorEmReais } from '../lib/pix';
 import { openWhatsApp } from '../lib/whatsapp';
 import { EQUIPE } from '../lib/equipe';
 import { Modal } from './UI';
 
 const reais = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Mensagem que vai para o cliente, com o código PIX copia e cola. */
-export function mensagemDeCobranca(nome: string, valor: number, codigo: string, descricao?: string) {
-  const primeiro = nome.trim().split(/\s+/)[0];
-  return `Olá ${primeiro}! Segue o PIX de ${reais(valor)}${descricao ? ` (${descricao})` : ''}:\n\n${codigo}\n\nÉ só copiar o código acima e colar no app do seu banco, em PIX copia e cola.`;
-}
-
 /**
  * Cobrança por PIX copia e cola: gera o código com a chave do negócio e o
  * valor, e manda pelo WhatsApp ou copia. Sem gateway e sem taxa; a
  * confirmação do pagamento continua manual.
+ *
+ * O código vai sozinho na mensagem: o cliente copia o balão inteiro e cola no
+ * banco. Com saudação junto, o banco recebia texto a mais e recusava o código.
  */
 export function CobrarPix({ cliente, valorInicial, aoFechar }: {
   cliente: { name: string; phone: string };
@@ -26,14 +23,12 @@ export function CobrarPix({ cliente, valorInicial, aoFechar }: {
 }) {
   const settings = useStore(state => state.settings);
   const setToast = useStore(state => state.setToast);
-  const [valor, setValor] = React.useState(valorInicial ? String(valorInicial).replace('.', ',') : '');
-  const [descricao, setDescricao] = React.useState('');
+  const [valor, setValor] = React.useState(valorInicial ? valorInicial.toFixed(2).replace('.', ',') : '');
 
   const chave = settings.pixChave ?? '';
   const configurado = chavePixValida(chave);
-  const numero = Number(valor.replace(/\./g, '').replace(',', '.'));
-  const valido = Number.isFinite(numero) && numero > 0;
-  const codigo = configurado && valido
+  const numero = lerValorEmReais(valor);
+  const codigo = configurado && numero !== null
     ? codigoPix({ chave, nome: settings.pixNome || settings.studioName, cidade: settings.pixCidade || 'BRASIL', valor: numero })
     : '';
 
@@ -47,7 +42,7 @@ export function CobrarPix({ cliente, valorInicial, aoFechar }: {
   };
 
   const enviar = () => {
-    if (!openWhatsApp(cliente.phone, mensagemDeCobranca(cliente.name, numero, codigo, descricao.trim() || undefined))) {
+    if (!openWhatsApp(cliente.phone, codigo)) {
       setToast({ message: `${cliente.name} não tem um telefone válido. Copie o código e mande por outro meio.`, type: 'error' });
     }
   };
@@ -68,12 +63,11 @@ export function CobrarPix({ cliente, valorInicial, aoFechar }: {
           <>
             <label className="flex flex-col gap-1.5 text-[13px] text-ios-text-secondary">
               Valor (R$)
-              <input className={campo} value={valor} onChange={e => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" autoFocus />
+              <input className={campo} value={valor} onChange={e => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" autoFocus={!valorInicial} />
             </label>
-            <label className="flex flex-col gap-1.5 text-[13px] text-ios-text-secondary">
-              Referente a (opcional)
-              <input className={campo} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Ex.: Corte de 10/10" />
-            </label>
+            {valor.trim() !== '' && (numero === null
+              ? <p className="text-[13px] text-red-400">Valor inválido. Use só números, como 80 ou 80,50.</p>
+              : <p className="text-[15px] font-semibold text-ios-text-primary">{cliente.name} vai pagar {reais(numero)}</p>)}
             {codigo && (
               <textarea
                 readOnly
@@ -90,7 +84,7 @@ export function CobrarPix({ cliente, valorInicial, aoFechar }: {
                 <Send size={16} /> Enviar no WhatsApp
               </button>
             </div>
-            <p className="text-[12px] text-ios-text-secondary">O app não vê quando o pagamento cai: confira no seu banco e lance a receita.</p>
+            <p className="text-[12px] text-ios-text-secondary">O código vai sozinho na mensagem, para o cliente copiar inteiro no app do banco. O app não vê quando o pagamento cai: confira no seu banco e lance a receita.</p>
           </>
         )}
       </div>

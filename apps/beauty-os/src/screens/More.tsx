@@ -24,6 +24,11 @@ import { applyTheme } from '../components/ThemeOnboarding';
 import { ImportarContatos } from '../components/ImportarContatos';
 import { SincronizarCalendario } from '../components/SincronizarCalendario';
 import { GoogleAgenda } from '../components/GoogleAgenda';
+import { analisarChavePix, normalizarChavePix, type TipoChavePix } from '../lib/pix';
+
+const NOME_DO_TIPO: Record<TipoChavePix, string> = {
+  email: 'e-mail', telefone: 'celular', cpf: 'CPF', cnpj: 'CNPJ', aleatoria: 'chave aleatória',
+};
 
 import { supabase } from '../lib/supabase';
 import { useStore, TAMANHO_MAXIMO_FOTO, ERRO_FORMATO_FOTO } from '../lib/store';
@@ -134,9 +139,18 @@ export default function More() {
   };
 
   const handleSaveSettings = async () => {
+    // A chave vai salva já no formato do PIX (CPF sem pontos, celular com +55,
+    // e-mail minúsculo). Salvar uma inválida deixava a cobrança dizendo para
+    // "cadastrar a chave" sem explicar o que estava errado.
+    const chaveDigitada = (editSettings.pixChave ?? '').trim();
+    const chave = chaveDigitada ? normalizarChavePix(chaveDigitada) : '';
+    if (chave === null) {
+      setToast({ message: 'A chave PIX não está num formato válido. Corrija ou apague o campo.', type: 'error' });
+      return;
+    }
     setLoadingAction('save-settings');
     try {
-      await updateSettings(editSettings);
+      await updateSettings({ ...editSettings, pixChave: chave || undefined });
       setIsSettingsOpen(false);
       setToast({ message: "Configurações salvas com sucesso", type: 'success' });
     } catch (err) {
@@ -301,7 +315,7 @@ export default function More() {
               Sair da conta
             </Button>
             <p className="text-center text-[10px] text-ios-text-secondary mt-6 font-medium tracking-widest uppercase opacity-40">
-              {settings.studioName || 'Leshanot OS'} · v3.1.0
+              {settings.studioName || 'Leshanot OS'} · v3.1.1
             </p>
           </div>
         </div>
@@ -476,10 +490,19 @@ export default function More() {
                   <input
                     className="w-full rounded-xl px-4 py-3 focus:outline-none text-[16px]"
                     style={{ color: textPrimary, background: inputBg, border: `1px solid ${inputBorder}` }}
-                    placeholder="Chave PIX (e-mail, CPF/CNPJ, +55... ou aleatória)"
+                    placeholder="Chave PIX (e-mail, CPF/CNPJ, celular ou aleatória)"
                     value={editSettings.pixChave ?? ''}
                     onChange={e => setEditSettings({ ...editSettings, pixChave: e.target.value })}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
+                  {(editSettings.pixChave ?? '').trim() !== '' && (() => {
+                    const chave = analisarChavePix(editSettings.pixChave ?? '');
+                    return chave
+                      ? <p className="text-[12px] px-1" style={{ color: textPrimary }}>Reconhecida como {NOME_DO_TIPO[chave.tipo]}: {chave.chave}</p>
+                      : <p className="text-[12px] px-1 text-red-400">Não parece uma chave PIX. Confira o CPF/CNPJ, o celular com DDD ou o e-mail.</p>;
+                  })()}
                   <div className="flex gap-2">
                     <input
                       className="flex-1 min-w-0 rounded-xl px-4 py-3 focus:outline-none text-[16px]"

@@ -7,6 +7,7 @@ import { BUSINESS_TYPES, VERTICALS, type BusinessType } from '../lib/vertical';
 import { ImportarContatos } from './ImportarContatos';
 import { SincronizarCalendario } from './SincronizarCalendario';
 import { GoogleAgenda } from './GoogleAgenda';
+import { lerValorEmReais } from '../lib/pix';
 
 const ACCENT_COLORS = [
   { name: 'Dourado', value: '#D4AF37', neon: '#F5D062', label: 'Clássico' },
@@ -174,7 +175,8 @@ export function Onboarding() {
 
   const adicionarServico = async () => {
     const nome = novoServico.nome.trim();
-    const preco = Number(novoServico.preco.replace(/\./g, '').replace(',', '.'));
+    // Serviço pode ser gratuito ("Avaliação"); "80.50" não pode virar 8050.
+    const preco = /^\s*0+([.,]0+)?\s*$/.test(novoServico.preco) ? 0 : lerValorEmReais(novoServico.preco) ?? NaN;
     if (!nome) return;
     if (!novoServico.preco.trim() || !Number.isFinite(preco) || preco < 0) {
       setToast({ message: `Informe o preço de ${nome}.`, type: 'error' });
