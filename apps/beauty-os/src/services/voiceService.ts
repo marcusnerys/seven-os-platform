@@ -3,6 +3,8 @@ import { getVertical } from '../lib/vertical';
 import { supabase } from '../lib/supabase';
 import { dataLocal, acharPorNome, semAcento, digitosTelefoneBR, formatarTelefoneBR } from '../lib/utils';
 import { openWhatsApp } from '../lib/whatsapp';
+import { codigoPix, chavePixValida } from '../lib/pix';
+import { mensagemDeCobranca } from '../components/CobrarPix';
 
 const reais = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -31,7 +33,7 @@ async function fetchComPrazo(url: string, init: RequestInit): Promise<Response> 
 }
 
 export interface VoiceCommandResult {
-  action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip' | 'create_service' | 'get_daily_summary' | 'show_financial_summary' | 'list_inactive_clients' | 'delete_client' | 'delete_transaction' | 'unknown';
+  action: 'create_appointment' | 'cancel_appointment' | 'create_client' | 'create_revenue' | 'create_expense' | 'search_client' | 'send_whatsapp' | 'show_dashboard_summary' | 'update_client_notes' | 'update_client_vip' | 'create_service' | 'get_daily_summary' | 'show_financial_summary' | 'list_inactive_clients' | 'delete_client' | 'delete_transaction' | 'charge_pix' | 'unknown';
   data?: any;
   message: string;
   status: 'complete' | 'incomplete';
@@ -111,7 +113,7 @@ export function useVoiceAssistant() {
     // o app mandava para uma aba que essa vertical esconde, com o assistente
     // dizendo que tinha dado certo.
     const SO_COM_AGENDA = ['create_appointment', 'cancel_appointment', 'create_client', 'update_client_notes',
-      'update_client_vip', 'create_service', 'search_client', 'send_whatsapp', 'list_inactive_clients', 'delete_client'];
+      'update_client_vip', 'create_service', 'search_client', 'send_whatsapp', 'list_inactive_clients', 'delete_client', 'charge_pix'];
     if (!getVertical(store.settings.businessType).hasScheduling && SO_COM_AGENDA.includes(result.action)) {
       return { mensagem: 'No controle de finanças pessoais não há agenda nem clientes. Posso registrar gastos, receitas ou mostrar o resumo do mês.', pergunta: false };
     }
@@ -373,6 +375,26 @@ export function useVoiceAssistant() {
             return `${t.type === 'revenue' ? 'Receita' : 'Despesa'} de R$ ${reais(t.amount)} excluída.`;
           },
         };
+      }
+
+      // Cobrança: monta o PIX copia e cola e abre o WhatsApp do cliente com a
+      // mensagem pronta. A pessoa só toca em enviar.
+      case 'charge_pix': {
+        const { clientName, amount, description } = data;
+        const valor = Math.abs(Number(amount));
+        if (!clientName) return perguntar('Quem devo cobrar?');
+        if (!Number.isFinite(valor) || valor === 0) return perguntar(`Qual o valor da cobrança de ${clientName}?`);
+        const { pixChave, pixNome, pixCidade, studioName } = store.settings;
+        if (!pixChave || !chavePixValida(pixChave)) {
+          return informar('Cadastre sua chave PIX em Mais → Configurações para eu poder cobrar.');
+        }
+        const { cliente, aviso } = acharCliente(clientName);
+        if (!cliente) return aviso;
+        const codigo = codigoPix({ chave: pixChave, nome: pixNome || studioName, cidade: pixCidade || 'BRASIL', valor });
+        const abriu = openWhatsApp(cliente.phone, mensagemDeCobranca(cliente.name, valor, codigo, description || undefined));
+        return informar(abriu
+          ? `Cobrança de R$ ${reais(valor)} pronta no WhatsApp de ${cliente.name}. É só enviar.`
+          : `${cliente.name} não tem um telefone válido. Cobre pelo perfil do cliente e copie o código.`);
       }
 
       default:

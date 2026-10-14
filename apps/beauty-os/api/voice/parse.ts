@@ -211,6 +211,7 @@ Ações Suportadas:
 - list_inactive_clients: {}
 - delete_client: {clientName}
 - delete_transaction: {type?: "revenue" | "expense", amount?, description?, date?}
+- charge_pix: {clientName, amount, description?}
 - unknown: {}
 
 Regras:
@@ -229,6 +230,8 @@ Regras:
    o que a pessoa disser para identificar (valor, descrição, data). Excluir
    ou desmarcar um agendamento é cancel_appointment. O aplicativo pede
    confirmação antes de excluir; em 'message' diga só o que vai ser excluído.
+8. Cobrar, mandar cobrança, pedir pagamento ou mandar o PIX para um cliente
+   é charge_pix, com o nome do cliente e o valor.
 
 Exemplo. Para "agendar corte para a Maria amanhã às 15h", com hoje sendo
 2026-03-10, a resposta correta é:
@@ -289,6 +292,7 @@ JSON:
       update_client_vip: ['clientName'],
       send_whatsapp: ['clientName'],
       delete_client: ['clientName'],
+      charge_pix: ['clientName', 'amount'],
     };
 
     const exigidos = OBRIGATORIOS[resultado?.action] ?? [];

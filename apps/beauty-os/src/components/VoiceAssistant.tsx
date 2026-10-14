@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Mic, X, Loader2, Keyboard, Check, AlertCircle, HelpCircle, Trash2 } from 'lucide-react';
 import { cn, EH_IOS } from '../lib/utils';
+import { membroDaAcao } from '../lib/equipe';
 import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
 import { useVoiceAssistant, VoiceCommandResult } from '../services/voiceService';
@@ -452,6 +453,15 @@ export function VoiceAssistant() {
                       {tipoResultado === 'feito' && <><Check size={13} /> Feito</>}
                       {tipoResultado === 'confirmar' && <><Trash2 size={13} /> Confirme</>}
                     </span>
+                    {tipoResultado !== 'erro' && result.action !== 'unknown' && (() => {
+                      const membro = membroDaAcao(result.action);
+                      return (
+                        <span className="flex items-center gap-2 text-[12px] text-ios-text-secondary">
+                          <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: membro.cor }}>{membro.nome[0]}</span>
+                          {membro.nome} · {membro.cargo}
+                        </span>
+                      );
+                    })()}
                     <p className="text-[16px] font-semibold text-ios-text-primary leading-snug">{result.message}</p>
                     {confirmacao && (
                       <div className="flex gap-2 pt-1">
