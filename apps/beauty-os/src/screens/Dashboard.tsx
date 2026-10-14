@@ -8,6 +8,7 @@ import { resolveMessage, openWhatsApp } from '../lib/whatsapp';
 import { cn, dataLocal, ehAniversarioHoje } from '../lib/utils';
 import { useStore, TAMANHO_MAXIMO_FOTO, ERRO_FORMATO_FOTO } from '../lib/store';
 import { getVertical } from '../lib/vertical';
+import { podeUsar, podeAbrirAba } from '../lib/permissoes';
 import { useWeather } from '../hooks/useWeather';
 
 export default function Dashboard() {
@@ -19,6 +20,13 @@ export default function Dashboard() {
   // levavam a uma aba que o App devolve no mesmo instante.
   const vertical = getVertical(settings.businessType);
   const agenda = vertical.hasScheduling;
+  const papel = useStore(state => state.papel);
+  const areasDaEquipe = useStore(state => state.areas);
+  const acesso = { papel, areas: areasDaEquipe };
+  const veFinanceiro = podeUsar(acesso, 'financeiro');
+  const veAgenda = agenda && podeUsar(acesso, 'agenda');
+  const veClientes = agenda && podeAbrirAba(acesso, 'clients');
+  const gravaClientes = agenda && (podeUsar(acesso, 'clientes') || podeUsar(acesso, 'agenda'));
   // O tema claro é pintado por variável do Tailwind que não muda em runtime,
   // então a cor do texto precisa ser calculada aqui. Sem isto, texto branco
   // ficava sobre fundo quase branco (contraste 1.12, ilegível).
@@ -51,8 +59,9 @@ export default function Dashboard() {
   const unreadCount = notifications.filter(n => !n.read).length;
   const revenueForecast = getRevenueForecast();
 
+  // A foto é o logo do negócio (página pública): só o dono troca.
   const handleAvatarClick = () => {
-    fileInputRef.current?.click();
+    if (papel === 'dono') fileInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -318,7 +327,7 @@ export default function Dashboard() {
       </GlassCard>
 
       {/* Birthday Banner */}
-      {agenda && birthdaysToday.length > 0 && (
+      {veClientes && birthdaysToday.length > 0 && (
         <motion.div
            initial={{ opacity: 0, scale: 0.95 }}
            animate={{ opacity: 1, scale: 1 }}
@@ -352,7 +361,7 @@ export default function Dashboard() {
       )}
 
       {/* Reminder Banner */}
-      {agenda && tomorrowAppointments.length > 0 && (
+      {veAgenda && tomorrowAppointments.length > 0 && (
         <motion.div
            initial={{ opacity: 0, scale: 0.95 }}
            animate={{ opacity: 1, scale: 1 }}
@@ -383,7 +392,7 @@ export default function Dashboard() {
       )}
 
       {/* Revenue Card */}
-      <GlassCard 
+      {veFinanceiro && <GlassCard 
         onClick={() => setActiveTab('financial')}
         className="card-gold-immersive p-[16px] flex flex-col gap-4 relative group cursor-pointer active:scale-[0.98] transition-transform shrink-0"
       >
@@ -413,19 +422,18 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </GlassCard>
+      </GlassCard>}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-[12px]">
         {[
-          ...(agenda ? [
-            { label: vertical.clientNounPlural, value: clients.length.toString(), icon: Users, color: 'gold', tab: 'clients' },
-            { label: 'Hoje', value: todayAppointments.length.toString(), icon: Calendar, color: 'gold', tab: 'agenda' },
-          ] : []),
-          { label: 'Projeção/Mês', value: `R$ ${revenueForecast.toFixed(0)}`, icon: TrendingUp, color: 'cyan', tab: 'financial' },
+          ...(veClientes ? [{ label: vertical.clientNounPlural, value: clients.length.toString(), icon: Users, color: 'gold', tab: 'clients' }] : []),
+          ...(veAgenda ? [{ label: 'Hoje', value: todayAppointments.length.toString(), icon: Calendar, color: 'gold', tab: 'agenda' }] : []),
+          // A projeção soma os horários do mês: só faz sentido para quem também vê a agenda.
+          ...(veFinanceiro && (podeUsar(acesso, 'agenda') || podeUsar(acesso, 'clientes')) ? [{ label: 'Projeção/Mês', value: `R$ ${revenueForecast.toFixed(0)}`, icon: TrendingUp, color: 'cyan', tab: 'financial' }] : []),
           ...(agenda
-            ? [{ label: 'Agenda Total', value: appointments.length.toString(), icon: UserPlus, color: 'gold', tab: 'agenda' }]
-            : [{ label: 'Lançamentos', value: transactions.length.toString(), icon: DollarSign, color: 'gold', tab: 'financial' }]),
+            ? (veAgenda ? [{ label: 'Agenda Total', value: appointments.length.toString(), icon: UserPlus, color: 'gold', tab: 'agenda' }] : [])
+            : (veFinanceiro ? [{ label: 'Lançamentos', value: transactions.length.toString(), icon: DollarSign, color: 'gold', tab: 'financial' }] : [])),
         ].map((kpi, i) => (
           <GlassCard 
             key={i} 
@@ -445,13 +453,13 @@ export default function Dashboard() {
          <h2 className="text-[10px] font-bold tracking-[0.5px] uppercase text-ios-text-secondary px-1">Atalhos rápidos</h2>
          <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
             {[
-              ...(agenda ? [
-                { id: 'appointment', label: 'Novo agendamento', icon: PlusCircle, tab: 'agenda' },
-                { id: 'client', label: `Nov${vertical.clientGender === 'f' ? 'a' : 'o'} ${vertical.clientNoun.toLowerCase()}`, icon: UserPlus, tab: 'clients' },
+              ...(veAgenda ? [{ id: 'appointment', label: 'Novo agendamento', icon: PlusCircle, tab: 'agenda' }] : []),
+              ...(gravaClientes ? [{ id: 'client', label: `Nov${vertical.clientGender === 'f' ? 'a' : 'o'} ${vertical.clientNoun.toLowerCase()}`, icon: UserPlus, tab: 'clients' }] : []),
+              ...(veFinanceiro ? [
+                { id: 'revenue', label: 'Registrar venda', icon: DollarSign, tab: 'financial' },
+                { id: 'expense', label: 'Registrar despesa', icon: TrendingUp, tab: 'financial' },
               ] : []),
-              { id: 'revenue', label: 'Registrar venda', icon: DollarSign, tab: 'financial' },
-              { id: 'expense', label: 'Registrar despesa', icon: TrendingUp, tab: 'financial' },
-              ...(agenda ? [{ id: 'agenda', label: 'Ver agenda', icon: Calendar, tab: 'agenda' }] : []),
+              ...(veAgenda ? [{ id: 'agenda', label: 'Ver agenda', icon: Calendar, tab: 'agenda' }] : []),
             ].map((action, i) => (
               <div 
                 key={i} 

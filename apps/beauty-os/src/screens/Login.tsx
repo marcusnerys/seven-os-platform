@@ -3,6 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Button, Input } from '../components/UI';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
+import { conviteGuardado } from '../lib/permissoes';
+
+// Quem veio por convite volta do e-mail de confirmação com o código no link:
+// o e-mail costuma abrir em outro navegador, sem o código guardado.
+const linkDeVolta = () => `${window.location.origin}/${conviteGuardado() ? `?convite=${conviteGuardado()}` : ''}`;
 import { LogIn, UserPlus, Key, ArrowLeft, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
@@ -48,7 +53,7 @@ export default function Login() {
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: { emailRedirectTo: `${window.location.origin}/` },
+      options: { emailRedirectTo: linkDeVolta() },
     });
     if (error) {
       setError('Não foi possível reenviar agora. Tente de novo em alguns minutos.');
@@ -70,7 +75,7 @@ export default function Login() {
       password,
       // Sem isto o link de confirmação aponta para a Site URL do projeto,
       // que pode não ser o endereço onde o app está publicado.
-      options: { emailRedirectTo: `${window.location.origin}/` },
+      options: { emailRedirectTo: linkDeVolta() },
     });
 
     if (error) {

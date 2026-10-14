@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input } from '../components/UI';
 import { ImportarContatos } from '../components/ImportarContatos';
 import { CobrarPix } from '../components/CobrarPix';
+import { podeUsar } from '../lib/permissoes';
 import { Logo } from '../components/Logo';
 import { Search, Plus, Contact, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck, QrCode } from 'lucide-react';
 import { cn, escapeICS, formatarTelefoneBR, digitosTelefoneBR } from '../lib/utils';
@@ -27,6 +28,11 @@ export default function Clients() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportarOpen, setIsImportarOpen] = useState(false);
   const [cobrando, setCobrando] = useState<{ name: string; phone: string } | null>(null);
+  const papel = useStore(state => state.papel);
+  const areasDaEquipe = useStore(state => state.areas);
+  const podeCobrar = podeUsar({ papel, areas: areasDaEquipe }, 'cobranca');
+  const podeEditar = podeUsar({ papel, areas: areasDaEquipe }, 'clientes') || podeUsar({ papel, areas: areasDaEquipe }, 'agenda');
+  const podeExcluir = podeUsar({ papel, areas: areasDaEquipe }, 'clientes');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   
   useEffect(() => {
@@ -216,14 +222,14 @@ export default function Clients() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <button
+          {podeEditar && <button
             type="button"
             onClick={() => setIsImportarOpen(true)}
             aria-label="Importar contatos do celular"
             className="h-11 px-3 rounded-xl bg-white/5 border border-white/10 text-ios-gold flex items-center gap-1.5 text-[12px] font-semibold shrink-0"
           >
             <Contact size={16} /> Importar
-          </button>
+          </button>}
         </div>
 
         {/* Filter Chips */}
@@ -289,7 +295,7 @@ export default function Clients() {
                 <div className="flex items-center justify-between gap-2 mb-0.5">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <h4 className="text-[14px] font-bold tracking-tightest truncate text-white">{client.name}</h4>
-                    <button 
+                    {podeEditar && <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleFavorite(client.id).catch(() => {
@@ -305,7 +311,7 @@ export default function Clients() {
                           client.isFavorite ? "text-ios-gold fill-ios-gold" : "text-white/20 group-hover/heart:text-white/40"
                         )} 
                       />
-                    </button>
+                    </button>}
                   </div>
                   {client.isVIP ? (
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -340,13 +346,13 @@ export default function Clients() {
                     <p className="text-[14px] font-bold text-white mb-1">{nenhum} {cliente} ainda</p>
                     <p className="text-[11px] text-white/50 leading-relaxed">Toque no <span className="text-ios-gold">+</span> para cadastrar<br />{fem ? 'sua' : 'seu'} {primeiro} {cliente}</p>
                   </div>
-                  <button
+                  {podeEditar && <button
                     type="button"
                     onClick={() => setIsImportarOpen(true)}
                     className="mt-2 h-11 px-5 rounded-2xl bg-ios-gold text-[#111214] text-[13px] font-bold flex items-center gap-2"
                   >
                     <Contact size={16} /> Trazer da agenda do celular
-                  </button>
+                  </button>}
                 </>
               ) : (
                 <>
@@ -359,7 +365,7 @@ export default function Clients() {
         </div>
       </div>
 
-      <button
+      {podeEditar && <button
         onClick={() => {
           // Cancelar uma edição deixava o formulário preenchido: o "+"
           // abria "Novo cliente" com o nome e o telefone de outra pessoa.
@@ -370,7 +376,7 @@ export default function Clients() {
         className="absolute bottom-6 right-6 w-12 h-12 rounded-full bg-ios-gold flex items-center justify-center text-ios-bg shadow-[0_10px_20px_rgba(230,192,139,0.3)] active:scale-95 transition-transform z-30"
       >
         <Plus size={24} strokeWidth={2.5} />
-      </button>
+      </button>}
 
       {cobrando && <CobrarPix cliente={cobrando} aoFechar={() => setCobrando(null)} />}
 
@@ -403,7 +409,7 @@ export default function Clients() {
                     <MessageCircle size={20} />
                     WhatsApp
                   </Button>
-                  <Button 
+                  {podeEditar && <Button
                     variant={favoritoAtual ? 'primary' : 'secondary'}
                     className="flex-1 h-14"
                     onClick={() => toggleFavorite(selectedClient.id).catch(() => {
@@ -412,19 +418,19 @@ export default function Clients() {
                   >
                     <Heart size={20} fill={favoritoAtual ? "currentColor" : "none"} />
                     {favoritoAtual ? (fem ? 'Favorita' : 'Favorito') : 'Favoritar'}
-                  </Button>
+                  </Button>}
                   {/* Na mesma linha: uma linha a mais de botões cobria o fim do
                       perfil. O perfil fecha para a cobrança não abrir por baixo dele. */}
-                  <Button variant="secondary" className="flex-1 h-14" onClick={() => {
+                  {podeCobrar && <Button variant="secondary" className="flex-1 h-14" onClick={() => {
                     setCobrando({ name: selectedClient.name, phone: selectedClient.phone });
                     setSelectedClient(null);
                   }}>
                     <QrCode size={20} />
                     Cobrar
-                  </Button>
+                  </Button>}
                 </div>
-                <div className="flex gap-4">
-                  <Button variant="secondary" className="flex-1 h-14" onClick={() => {
+                {(podeEditar || podeExcluir) && <div className="flex gap-4">
+                  {podeEditar && <Button variant="secondary" className="flex-1 h-14" onClick={() => {
                     setNewClient({
                       name: selectedClient.name,
                       phone: selectedClient.phone,
@@ -437,8 +443,8 @@ export default function Clients() {
                     setIsAddModalOpen(true);
                   }}>
                     Editar
-                  </Button>
-                  <Button 
+                  </Button>}
+                  {podeExcluir && <Button
                     variant="secondary" 
                     className="flex-1 text-red-100 hover:text-red-400 border border-red-900/20 h-14"
                     onClick={async () => {
@@ -455,8 +461,8 @@ export default function Clients() {
                     }}
                   >
                     Excluir
-                  </Button>
-                </div>
+                  </Button>}
+                </div>}
               </div>
             }
           >

@@ -6,6 +6,7 @@ import { logger } from './qa/logger';
 import { perfMonitor } from './qa/performance';
 import type { BusinessType } from './vertical';
 import { dataLocal, novoUUID } from './utils';
+import { AREAS, type Area, type Papel } from './permissoes';
 
 export type AppointmentStatus = 'Confirmado' | 'Pendente' | 'Cancelado' | 'Concluído';
 
@@ -206,6 +207,16 @@ interface AppStore {
   hasOnboarded: boolean;
   /** True depois que a leitura de beautyos_settings terminou (com ou sem linha). */
   configLoaded: boolean;
+  /** Empresa de quem está logado, como dono ou como membro da equipe (migration 0022). */
+  empresaId: string | null;
+  papel: Papel;
+  /** Áreas liberadas pelo dono. O dono tem todas. */
+  areas: Area[];
+  /** Relê de qual empresa a pessoa faz parte (depois de aceitar convite, sair ou ser removida). */
+  recarregarEquipe: () => Promise<void>;
+  /** Código de convite vindo de um link, esperando a pessoa entrar e aceitar. */
+  convitePendente: string | null;
+  setConvitePendente: (codigo: string | null) => void;
   setTheme: (accent: string, bg: 'dark' | 'light') => void;
   setHasChosenTheme: (v: boolean) => void;
   setHasOnboarded: (v: boolean) => void;
@@ -303,7 +314,19 @@ export const useStore = create<AppStore>()(
       // e o passo seguinte falha, a nova tentativa não pode lançar de novo.
       const receitaLancada = new Set<string>();
 
+      // Antes da equipe ser lida, e em toda conta de uma pessoa só, a empresa
+      // é o próprio login.
+      const empresaDe = (user: User) => get().empresaId ?? user.id;
+
+      const VAZIO = {
+        clients: [], appointments: [], transactions: [],
+        services: [], notifications: [], automationTemplates: [], automationLogs: [],
+        settings: { studioName: 'Meu Negócio', location: 'São Paulo, BR', currency: 'BRL', businessType: 'generic' as BusinessType },
+      };
+
+      let geracao = 0;
       const stopListeners = () => {
+        geracao++;
         if (realtimeChannel) {
           supabase.removeChannel(realtimeChannel);
           realtimeChannel = null;
@@ -345,19 +368,25 @@ export const useStore = create<AppStore>()(
 
       const startListeners = (empresaId: string) => {
         stopListeners();
+        // Leituras e recargas em voo da empresa anterior não podem gravar por
+        // cima da atual depois de entrar numa equipe ou sair dela.
+        const minha = geracao;
+        const setSeAtual: typeof set = (parcial) => { if (minha === geracao) set(parcial); };
 
-        carregar(fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => set({ clients: rows }), fromSnakeCaseClient));
-        carregar(fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => set({ appointments: rows }), fromSnakeCaseAppointment, 'time'));
-        carregar(fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => set({ transactions: rows }), fromSnakeCaseTransaction, 'date'));
-        carregar(fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => set({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service)));
-        carregar(fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation));
-        carregar(fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em'));
+        carregar(fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => setSeAtual({ clients: rows }), fromSnakeCaseClient));
+        carregar(fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => setSeAtual({ appointments: rows }), fromSnakeCaseAppointment, 'time'));
+        carregar(fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => setSeAtual({ transactions: rows }), fromSnakeCaseTransaction, 'date'));
+        carregar(fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => setSeAtual({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service)));
+        carregar(fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => setSeAtual({ automationTemplates: rows }), fromSnakeCaseAutomation));
+        carregar(fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => setSeAtual({ notifications: rows }), fromSnakeCaseNotification, 'criado_em'));
         // Os registros de automação nunca eram lidos. O aviso de aniversário
         // conferia "já tratei hoje?" numa lista sempre vazia e voltava a cada
         // 15 minutos, mesmo depois de Ignorar ou de mandar os parabéns.
-        carregar(fetchAndSet('beautyos_automation_logs', empresaId, (rows: string[]) => set({ automationLogs: rows }), (r) => r.id as string));
+        carregar(fetchAndSet('beautyos_automation_logs', empresaId, (rows: string[]) => setSeAtual({ automationLogs: rows }), (r) => r.id as string));
 
-        supabase.from('beautyos_settings').select('*').eq('empresa_id', empresaId).maybeSingle().then(({ data, error }) => {
+        // Relida quando o dono muda algo: com várias pessoas na equipe, a chave
+        // PIX corrigida num aparelho precisa chegar à cobrança dos outros.
+        const lerConfiguracoes = () => supabase.from('beautyos_settings').select('*').eq('empresa_id', empresaId).maybeSingle().then(({ data, error }) => {
           // Sem olhar o `error`, qualquer falha de leitura (rede oscilando, token
           // renovando) era lida como "não existe linha" e o negócio voltava a se
           // chamar "Meu Negócio" no vertical genérico. Pior: se a pessoa
@@ -381,7 +410,7 @@ export const useStore = create<AppStore>()(
             // volta do app ao primeiro plano, e isso fecharia no meio o
             // "Refazer configuração inicial" de quem saiu para copiar algo.
             const primeiraLeitura = !get().configLoaded;
-            set({
+            setSeAtual({
               settings: {
                 studioName: data.studio_name,
                 location: data.location,
@@ -404,9 +433,10 @@ export const useStore = create<AppStore>()(
             });
           } else {
             const defaults: Settings = { studioName: 'Meu Negócio', location: 'São Paulo, BR', currency: 'BRL', businessType: 'generic' };
-            set({ settings: defaults, configLoaded: true });
+            setSeAtual({ settings: defaults, configLoaded: true });
           }
         });
+        void lerConfiguracoes();
 
         // Uma rajada de mudanças vira uma leitura só. Cada evento recarregava
         // a tabela inteira: importar 500 contatos eram 500 recargas da lista
@@ -415,27 +445,81 @@ export const useStore = create<AppStore>()(
           let espera: ReturnType<typeof setTimeout> | undefined;
           return () => {
             clearTimeout(espera);
-            espera = setTimeout(recarregar, 400);
+            espera = setTimeout(() => { if (minha === geracao) recarregar(); }, 400);
           };
         };
         realtimeChannel = supabase
           .channel(`empresa-${empresaId}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_clients', filter: `empresa_id=eq.${empresaId}` },
-            emLote(() => fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => set({ clients: rows }), fromSnakeCaseClient)))
+            emLote(() => fetchAndSet('beautyos_clients', empresaId, (rows: Client[]) => setSeAtual({ clients: rows }), fromSnakeCaseClient)))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_appointments', filter: `empresa_id=eq.${empresaId}` },
-            emLote(() => fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => set({ appointments: rows }), fromSnakeCaseAppointment, 'time')))
+            emLote(() => fetchAndSet('beautyos_appointments', empresaId, (rows: Appointment[]) => setSeAtual({ appointments: rows }), fromSnakeCaseAppointment, 'time')))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_transactions', filter: `empresa_id=eq.${empresaId}` },
-            emLote(() => fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => set({ transactions: rows }), fromSnakeCaseTransaction, 'date')))
+            emLote(() => fetchAndSet('beautyos_transactions', empresaId, (rows: Transaction[]) => setSeAtual({ transactions: rows }), fromSnakeCaseTransaction, 'date')))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_notifications', filter: `empresa_id=eq.${empresaId}` },
-            emLote(() => fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => set({ notifications: rows }), fromSnakeCaseNotification, 'criado_em')))
+            emLote(() => fetchAndSet('beautyos_notifications', empresaId, (rows: Notification[]) => setSeAtual({ notifications: rows }), fromSnakeCaseNotification, 'criado_em')))
           // Serviços e automações também precisam escutar: sem isto, cadastrar
           // ou apagar um serviço mostrava o toast de sucesso mas a lista não
           // mudava, e a pessoa repetia a operação achando que não tinha salvo.
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_services', filter: `empresa_id=eq.${empresaId}` },
-            emLote(() => fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => set({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service))))
+            emLote(() => fetchAndSet('beautyos_services', empresaId, (rows: Service[]) => setSeAtual({ services: rows }), (r) => ({ id: r.id, name: r.name, price: Number(r.price) || 0, duration: r.duration } as Service))))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_automation_templates', filter: `empresa_id=eq.${empresaId}` },
-            emLote(() => fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => set({ automationTemplates: rows }), fromSnakeCaseAutomation)))
+            emLote(() => fetchAndSet('beautyos_automation_templates', empresaId, (rows: AutomationTemplate[]) => setSeAtual({ automationTemplates: rows }), fromSnakeCaseAutomation)))
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_settings', filter: `empresa_id=eq.${empresaId}` },
+            emLote(() => { void lerConfiguracoes(); }))
+          // Envio de aniversário feito num aparelho não pode ser oferecido de novo no outro.
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_automation_logs', filter: `empresa_id=eq.${empresaId}` },
+            emLote(() => fetchAndSet('beautyos_automation_logs', empresaId, (rows: string[]) => setSeAtual({ automationLogs: rows }), (r) => r.id as string)))
           .subscribe();
+      };
+
+      type Equipe = { empresaId: string; papel: Papel; areas: Area[] };
+
+      // De qual empresa a pessoa faz parte e o que pode ver. Quem ficou sem
+      // equipe (foi removido ou saiu) ganha de novo uma empresa própria.
+      // 'sem_tabela': banco ainda sem a migration 0022 (a empresa é o login).
+      const lerEquipe = async (user: User): Promise<Equipe | 'sem_tabela' | 'falha'> => {
+        const ler = () => supabase.from('beautyos_membros').select('empresa_id, papel, areas').eq('user_id', user.id).maybeSingle();
+        let { data, error } = await ler();
+        if (!error && !data) {
+          const garantia = await supabase.rpc('beautyos_garantir_empresa');
+          if (!garantia.error) ({ data, error } = await ler());
+        }
+        if (error && (error.code === 'PGRST205' || error.code === '42P01')) return 'sem_tabela';
+        if (error || !data) return 'falha';
+        return {
+          empresaId: data.empresa_id as string,
+          papel: data.papel === 'membro' ? 'membro' : 'dono',
+          areas: ((data.areas ?? []) as string[]).filter((a): a is Area => (AREAS as string[]).includes(a)),
+        };
+      };
+
+      let tentativas = 0;
+      const entrar = async (user: User) => {
+        const lida = await lerEquipe(user);
+        if (get().user?.id !== user.id) return; // trocou de conta no meio da leitura
+        const { empresaId, papel, areas } = get();
+        let atual: Equipe;
+        if (lida === 'falha') {
+          // Rede oscilando: mantém o que já sabia. Sem saber de qual empresa a
+          // pessoa é, não abre nada (nem o questionário de dono) e tenta de novo.
+          if (!empresaId) {
+            if (tentativas++ < 5) setTimeout(() => { if (get().user?.id === user.id) void entrar(user); }, 3000 * tentativas);
+            else set({ toast: { message: 'Não consegui carregar sua conta. Verifique a internet e abra o app de novo.', type: 'error' } });
+            return;
+          }
+          atual = { empresaId, papel, areas };
+        } else {
+          atual = lida === 'sem_tabela' ? { empresaId: user.id, papel: 'dono', areas: AREAS } : lida;
+        }
+        tentativas = 0;
+        if (empresaId !== null && empresaId !== atual.empresaId) {
+          // Entrou numa equipe ou saiu dela: nada da empresa anterior fica na tela.
+          stopListeners();
+          set({ ...VAZIO, configLoaded: false, hasOnboarded: false, hasChosenTheme: false });
+        }
+        set({ empresaId: atual.empresaId, papel: atual.papel, areas: atual.areas });
+        startListeners(atual.empresaId);
       };
 
       supabase.auth.onAuthStateChange((_event, session) => {
@@ -446,16 +530,17 @@ export const useStore = create<AppStore>()(
         if (_event === 'PASSWORD_RECOVERY') set({ isRecoveringPassword: true });
         set({ user, loading: false });
         if (user) {
-          startListeners(user.id);
+          // Fora do callback: consultar o banco dentro dele pode travar o
+          // cliente de autenticação do Supabase.
+          setTimeout(() => { void entrar(user); }, 0);
         } else {
           // Limpa TUDO do dono anterior. Antes sobravam serviços, notificações
           // (com nome de cliente), templates e o nome do negócio na tela — e
           // quem entrasse em seguida na mesma aba via os dados de quem saiu.
           stopListeners();
           set({
-            clients: [], appointments: [], transactions: [],
-            services: [], notifications: [], automationTemplates: [], automationLogs: [],
-            settings: { studioName: 'Meu Negócio', location: 'São Paulo, BR', currency: 'BRL', businessType: 'generic' },
+            ...VAZIO,
+            empresaId: null, papel: 'dono', areas: AREAS,
             // hasOnboarded fica no localStorage do aparelho, não da conta. Sem
             // zerar aqui, a segunda pessoa a entrar no mesmo navegador pula o
             // questionário e fica no vertical genérico sem nunca escolher.
@@ -497,12 +582,22 @@ export const useStore = create<AppStore>()(
         hasChosenTheme: false,
         hasOnboarded: false,
         configLoaded: false,
+        empresaId: null,
+        papel: 'dono',
+        areas: AREAS,
+        recarregarEquipe: async () => {
+          const user = get().user;
+          if (user) await entrar(user);
+        },
+        convitePendente: null,
+        setConvitePendente: (codigo) => set({ convitePendente: codigo }),
         setTheme: (accent, bg) => {
           set({ themeAccent: accent, themeBg: bg });
-          const { user } = get();
-          if (user) {
+          const { user, papel } = get();
+          // O tema salvo é o do negócio (página pública): só o dono grava.
+          if (user && papel === 'dono') {
             supabase.from('beautyos_settings').upsert({
-              empresa_id: user.id,
+              empresa_id: empresaDe(user),
               theme_accent: accent,
               theme_bg: bg,
             }).then(() => {});
@@ -511,13 +606,13 @@ export const useStore = create<AppStore>()(
         setHasChosenTheme: (v) => set({ hasChosenTheme: v }),
         setHasOnboarded: (v) => {
           set({ hasOnboarded: v });
-          const { user } = get();
+          const { user, papel } = get();
           // Grava no banco que o onboarding terminou, para outro aparelho
           // saber que esta conta já foi configurada.
-          if (v && user) {
+          if (v && user && papel === 'dono') {
             supabase.from('beautyos_settings')
               .update({ onboarded_at: new Date().toISOString() })
-              .eq('empresa_id', user.id)
+              .eq('empresa_id', empresaDe(user))
               .then(({ error }) => {
                 if (error) console.error('Falha ao registrar onboarding:', error.message);
               });
@@ -537,7 +632,7 @@ export const useStore = create<AppStore>()(
           if (!user) return;
           try {
             const { error } = await supabase.from('beautyos_clients').insert({
-              empresa_id: user.id,
+              empresa_id: empresaDe(user),
               name: client.name,
               email: client.email,
               phone: client.phone,
@@ -565,7 +660,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_clients').update(toSnakeCaseClient(updates)).eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_clients').update(toSnakeCaseClient(updates)).eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, `beautyos_clients/${id}`);
@@ -583,7 +678,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_clients').delete().eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_clients').delete().eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
             set(s => ({ clients: s.clients.filter(x => x.id !== id) }));
           } catch (error) {
@@ -617,7 +712,7 @@ export const useStore = create<AppStore>()(
                 const { data: newClient, error: clientError } = await supabase
                   .from('beautyos_clients')
                   .insert({
-                    empresa_id: user.id,
+                    empresa_id: empresaDe(user),
                     name: appointment.clientName,
                     phone: appointment.clientPhone,
                     email: '',
@@ -637,7 +732,7 @@ export const useStore = create<AppStore>()(
 
             const startTime = performance.now();
             const { error } = await supabase.from('beautyos_appointments').insert({
-              empresa_id: user.id,
+              empresa_id: empresaDe(user),
               client_id: finalClientId === 'public-booking' ? null : finalClientId,
               client_name: appointment.clientName,
               client_phone: appointment.clientPhone,
@@ -698,7 +793,7 @@ export const useStore = create<AppStore>()(
             if (updates.price !== undefined) payload.price = updates.price;
             if (updates.notes !== undefined) payload.notes = updates.notes;
 
-            const { error } = await supabase.from('beautyos_appointments').update(payload).eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_appointments').update(payload).eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, `beautyos_appointments/${id}`);
@@ -709,7 +804,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_appointments').update({ status }).eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_appointments').update({ status }).eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, `beautyos_appointments/${id}`);
@@ -720,7 +815,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_appointments').delete().eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_appointments').delete().eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
             set(s => ({ appointments: s.appointments.filter(x => x.id !== id) }));
           } catch (error) {
@@ -733,7 +828,7 @@ export const useStore = create<AppStore>()(
           if (!user) return;
           try {
             const { error } = await supabase.from('beautyos_transactions').insert({
-              empresa_id: user.id,
+              empresa_id: empresaDe(user),
               amount: transaction.amount,
               type: transaction.type,
               category: transaction.category,
@@ -750,7 +845,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_transactions').delete().eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_transactions').delete().eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
             set(s => ({ transactions: s.transactions.filter(x => x.id !== id) }));
           } catch (error) {
@@ -763,7 +858,7 @@ export const useStore = create<AppStore>()(
           if (!user) return;
           try {
             const { error } = await supabase.from('beautyos_notifications').insert({
-              empresa_id: user.id,
+              empresa_id: empresaDe(user),
               title: notification.title,
               message: notification.message,
               type: notification.type,
@@ -779,7 +874,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_notifications').update({ read: true }).eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_notifications').update({ read: true }).eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, `beautyos_notifications/${id}`);
@@ -790,7 +885,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_notifications').delete().eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_notifications').delete().eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
             set(s => ({ notifications: s.notifications.filter(x => x.id !== id) }));
           } catch (error) {
@@ -908,7 +1003,7 @@ export const useStore = create<AppStore>()(
             for (let i = 0; i < clientes.length; i += LOTE) {
               const { error } = await supabase.from('beautyos_clients').insert(
                 clientes.slice(i, i + LOTE).map(c => ({
-                  empresa_id: user.id,
+                  empresa_id: empresaDe(user),
                   name: c.name,
                   email: c.email,
                   phone: c.phone,
@@ -938,7 +1033,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_services').insert({ empresa_id: user.id, name: service.name, price: service.price, duration: service.duration });
+            const { error } = await supabase.from('beautyos_services').insert({ empresa_id: empresaDe(user), name: service.name, price: service.price, duration: service.duration });
             if (error) throw error;
           } catch (error) {
             handleSupabaseError(error, OperationType.CREATE, 'beautyos_services');
@@ -949,7 +1044,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_services').update(updates).eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_services').update(updates).eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, `beautyos_services/${id}`);
@@ -960,7 +1055,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_services').delete().eq('id', id).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_services').delete().eq('id', id).eq('empresa_id', empresaDe(user));
             if (error) throw error;
             set(s => ({ services: s.services.filter(x => x.id !== id) }));
           } catch (error) {
@@ -977,8 +1072,9 @@ export const useStore = create<AppStore>()(
             if (updates.message !== undefined) payload.message = updates.message;
             if (updates.isActive !== undefined) payload.is_active = updates.isActive;
             if (updates.type !== undefined) payload.type = updates.type;
-            const { error } = await supabase.from('beautyos_automation_templates').update(payload).eq('id', id).eq('empresa_id', user.id);
+            const { data, error } = await supabase.from('beautyos_automation_templates').update(payload).eq('id', id).eq('empresa_id', empresaDe(user)).select('id');
             if (error) throw error;
+            if (!data?.length) throw new Error('Só quem é dono do negócio pode mudar as mensagens automáticas.');
             // Aplica já. Esperando o realtime, o texto salvo voltava por um
             // instante ao antigo — e com o canal reconectando, ficava.
             set(s => ({ automationTemplates: s.automationTemplates.map(t => t.id === id ? { ...t, ...updates } : t) }));
@@ -991,7 +1087,7 @@ export const useStore = create<AppStore>()(
           const user = get().user;
           if (!user) return;
           try {
-            const { error } = await supabase.from('beautyos_automation_logs').upsert({ id: logKey, empresa_id: user.id, sent_at: new Date().toISOString() });
+            const { error } = await supabase.from('beautyos_automation_logs').upsert({ id: logKey, empresa_id: empresaDe(user), sent_at: new Date().toISOString() });
             if (error) throw error;
             set(s => ({ automationLogs: s.automationLogs.includes(logKey) ? s.automationLogs : [...s.automationLogs, logKey] }));
           } catch (error) {
@@ -1030,7 +1126,7 @@ export const useStore = create<AppStore>()(
 
             // A página pública lê daqui. Falhando, o logo aparecia no app mas
             // não para o cliente, e a tela dizia que tinha dado certo.
-            const { error: erroSettings } = await supabase.from('beautyos_settings').update({ avatar_url: url }).eq('empresa_id', user.id);
+            const { error: erroSettings } = await supabase.from('beautyos_settings').update({ avatar_url: url }).eq('empresa_id', empresaDe(user));
             if (erroSettings) throw erroSettings;
           } catch (error) {
             handleSupabaseError(error, OperationType.UPDATE, 'avatar');
@@ -1042,7 +1138,7 @@ export const useStore = create<AppStore>()(
           if (!user) return;
           const agendaToken = novoUUID();
           try {
-            const { error } = await supabase.from('beautyos_settings').update({ agenda_token: agendaToken }).eq('empresa_id', user.id);
+            const { error } = await supabase.from('beautyos_settings').update({ agenda_token: agendaToken }).eq('empresa_id', empresaDe(user));
             if (error) throw error;
             set(s => ({ settings: { ...s.settings, agendaToken } }));
           } catch (error) {
@@ -1063,7 +1159,7 @@ export const useStore = create<AppStore>()(
           try {
             const { themeAccent, themeBg } = get();
             const { error } = await supabase.from('beautyos_settings').upsert({
-              empresa_id: user.id,
+              empresa_id: empresaDe(user),
               studio_name: newSettings.studioName,
               location: newSettings.location,
               currency: newSettings.currency,

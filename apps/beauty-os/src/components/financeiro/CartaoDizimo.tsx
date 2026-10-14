@@ -19,6 +19,7 @@ export function CartaoDizimo({ periodo }: { periodo: Periodo }) {
   const updateSettings = useStore(state => state.updateSettings);
   const addTransaction = useStore(state => state.addTransaction);
   const setToast = useStore(state => state.setToast);
+  const ehDono = useStore(state => state.papel === 'dono');
   const [ajustando, setAjustando] = React.useState(false);
   const [percentual, setPercentual] = React.useState(String(settings.dizimoPercentual ?? 10));
   const [registrando, setRegistrando] = React.useState(false);
@@ -64,9 +65,11 @@ export function CartaoDizimo({ periodo }: { periodo: Periodo }) {
           <span className="text-[15px] font-bold text-ios-text-primary">Dízimo</span>
           <span className="text-[12px] text-ios-text-secondary">{pct.toLocaleString('pt-BR')}% das receitas</span>
         </div>
-        <button onClick={() => setAjustando(v => !v)} aria-label="Ajustar dízimo" className="w-9 h-9 -mr-2 rounded-full flex items-center justify-center text-ios-text-secondary">
-          <Settings2 size={17} />
-        </button>
+        {ehDono && (
+          <button onClick={() => setAjustando(v => !v)} aria-label="Ajustar dízimo" className="w-9 h-9 -mr-2 rounded-full flex items-center justify-center text-ios-text-secondary">
+            <Settings2 size={17} />
+          </button>
+        )}
       </div>
 
       {ajustando && (

@@ -29,6 +29,8 @@ import { analisarChavePix, normalizarChavePix, type TipoChavePix } from '../lib/
 const NOME_DO_TIPO: Record<TipoChavePix, string> = {
   email: 'e-mail', telefone: 'celular', cpf: 'CPF', cnpj: 'CNPJ', aleatoria: 'chave aleatória',
 };
+import { EquipeAcesso } from '../components/EquipeAcesso';
+import { podeUsar } from '../lib/permissoes';
 
 import { supabase } from '../lib/supabase';
 import { useStore, TAMANHO_MAXIMO_FOTO, ERRO_FORMATO_FOTO } from '../lib/store';
@@ -54,11 +56,18 @@ export default function More() {
   const deleteService = useStore(state => state.deleteService);
   const settings = useStore(state => state.settings);
   const updateSettings = useStore(state => state.updateSettings);
+  const papel = useStore(state => state.papel);
+  const areasDaEquipe = useStore(state => state.areas);
+  const empresaId = useStore(state => state.empresaId);
+  const ehDono = papel === 'dono';
+  const veAgenda = podeUsar({ papel, areas: areasDaEquipe }, 'agenda');
+  const [isEquipeOpen, setIsEquipeOpen] = useState(false);
   
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   
+  // A foto é o logo do negócio (página pública): só o dono troca.
   const handleAvatarClick = () => {
-    fileInputRef.current?.click();
+    if (ehDono) fileInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,16 +133,17 @@ export default function More() {
     }
   };
 
+  // O link é da empresa, não do login: o mesmo para toda a equipe.
   const openInAppBrowser = () => {
     if (!user) return;
-    const link = `${window.location.origin}/book/${user.id}`;
+    const link = `${window.location.origin}/book/${empresaId ?? user.id}`;
     setBrowserUrl(link);
     setIsBrowserOpen(true);
   };
 
   const copyBookingLink = () => {
     if (!user) return;
-    const link = `${window.location.origin}/book/${user.id}`;
+    const link = `${window.location.origin}/book/${empresaId ?? user.id}`;
     navigator.clipboard.writeText(link);
     setToast({ message: "Link copiado para a área de transferência", type: 'success' });
   };
@@ -201,17 +211,20 @@ export default function More() {
         // Pessoais o item virava "Categorias", pedia preço e minutos e não
         // tinha efeito nenhum; importar contatos gravava gente numa tela que
         // essa vertical esconde.
-        ...(vertical.hasScheduling ? [
+        ...(vertical.hasScheduling && veAgenda ? [
           { label: vertical.serviceNounPlural, icon: Tag, color: 'text-ios-gold', action: () => setIsServicesOpen(true), badge: services.length.toString() },
           { label: 'Link de Agendamento', icon: Globe, color: 'text-ios-cyan', action: openInAppBrowser },
+        ] : []),
+        ...(vertical.hasScheduling && ehDono ? [
           { label: 'Automação WhatsApp', icon: MessageCircle, color: 'text-ios-gold', action: () => useStore.getState().setActiveTab('automation') },
         ] : []),
+        { label: ehDono ? 'Equipe e acessos' : 'Equipe', icon: Users, color: 'text-ios-gold', action: () => setIsEquipeOpen(true) },
       ]
     },
     {
       title: 'Ferramentas',
       items: [
-        ...(vertical.hasScheduling ? [
+        ...(vertical.hasScheduling && ehDono ? [
           { label: 'Importar Contatos do Celular', icon: Users, color: 'text-ios-cyan', action: () => setIsContatosOpen(true) },
           { label: 'Ligar Agenda ao Calendário do Celular', icon: CalendarDays, color: 'text-ios-gold', action: () => setIsCalendarioOpen(true) },
         ] : []),
@@ -220,8 +233,10 @@ export default function More() {
     {
       title: 'Conta',
       items: [
-        { label: `Configurações ${vertical.businessArticle} ${vertical.businessNoun}`, icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
-        { label: 'Refazer configuração inicial', icon: RefreshCw, color: 'text-ios-text-secondary', action: () => setHasOnboarded(false) },
+        ...(ehDono ? [
+          { label: `Configurações ${vertical.businessArticle} ${vertical.businessNoun}`, icon: Settings, color: 'text-ios-text-secondary', action: () => setIsSettingsOpen(true) },
+          { label: 'Refazer configuração inicial', icon: RefreshCw, color: 'text-ios-text-secondary', action: () => setHasOnboarded(false) },
+        ] : []),
         { label: 'Plano Premium', icon: CreditCard, color: 'text-ios-gold', badge: 'Ativo' },
       ]
     },
@@ -315,13 +330,18 @@ export default function More() {
               Sair da conta
             </Button>
             <p className="text-center text-[10px] text-ios-text-secondary mt-6 font-medium tracking-widest uppercase opacity-40">
-              {settings.studioName || 'Leshanot OS'} · v3.1.1
+              {settings.studioName || 'Leshanot OS'} · v3.2.0
             </p>
           </div>
         </div>
       </div>
       
       <AnimatePresence>
+        {isEquipeOpen && (
+          <Modal isOpen={isEquipeOpen} onClose={() => setIsEquipeOpen(false)} title="Equipe">
+            <EquipeAcesso />
+          </Modal>
+        )}
         {isContatosOpen && (
           <Modal isOpen={isContatosOpen} onClose={() => setIsContatosOpen(false)} title="Importar contatos">
             <ImportarContatos aoConcluir={() => setIsContatosOpen(false)} />

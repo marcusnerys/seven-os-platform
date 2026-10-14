@@ -19,19 +19,20 @@ const minutos = (ms: number) => {
  * servidor: fechar o app e voltar não perde nada.
  */
 export function PainelImportacao() {
-  const userId = useStore(state => state.user?.id);
+  const empresaId = useStore(state => state.empresaId);
+  const veFinanceiro = useStore(state => state.papel === 'dono' || state.areas.includes('financeiro'));
   const setActiveTab = useStore(state => state.setActiveTab);
   const { itens, painel, setPainel, setRevisar, carregar, descartar, lerOffline, limpar } = useImportacoes();
   const [, setTique] = React.useState(0);
 
   // Banco e realtime: a função grava o progresso e o resultado na linha.
   React.useEffect(() => {
-    if (!userId) return;
+    if (!empresaId || !veFinanceiro) return;
     carregar();
     let espera: ReturnType<typeof setTimeout> | undefined;
     const canal = supabase
-      .channel(`importacoes-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_importacoes', filter: `empresa_id=eq.${userId}` }, () => {
+      .channel(`importacoes-${empresaId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_importacoes', filter: `empresa_id=eq.${empresaId}` }, () => {
         clearTimeout(espera);
         espera = setTimeout(carregar, 300);
       })
@@ -46,7 +47,7 @@ export function PainelImportacao() {
       document.removeEventListener('visibilitychange', aoVoltar);
       limpar();
     };
-  }, [userId]);
+  }, [empresaId, veFinanceiro]);
 
   const andamento = itens.filter(i => i.status === 'enviando' || i.status === 'lendo');
   const prontos = itens.filter(i => i.status === 'pronto');
