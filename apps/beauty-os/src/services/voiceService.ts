@@ -3,8 +3,7 @@ import { getVertical } from '../lib/vertical';
 import { supabase } from '../lib/supabase';
 import { dataLocal, acharPorNome, semAcento, digitosTelefoneBR, formatarTelefoneBR } from '../lib/utils';
 import { openWhatsApp } from '../lib/whatsapp';
-import { codigoPix, chavePixValida } from '../lib/pix';
-import { mensagemDeCobranca } from '../components/CobrarPix';
+import { chavePixValida, lerValorEmReais } from '../lib/pix';
 
 const reais = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -43,6 +42,8 @@ export interface VoiceCommandResult {
 export type ResultadoExecucao = {
   mensagem: string;
   pergunta: boolean;
+  /** O comando não pôde ser feito (falta configuração, por exemplo). */
+  falhou?: boolean;
   /** Exclusão: só roda depois de a pessoa tocar em "Excluir". Devolve a frase final. */
   confirmar?: () => Promise<string>;
 } | null;
@@ -106,6 +107,8 @@ export function useVoiceAssistant() {
     // só é mostrada e o assistente fecha.
     const perguntar = (mensagem: string): ResultadoExecucao => ({ mensagem, pergunta: true });
     const informar = (mensagem: string): ResultadoExecucao => ({ mensagem, pergunta: false });
+    // Não deu para fazer: aparece como erro, sem "Feito".
+    const falhar = (mensagem: string): ResultadoExecucao => ({ mensagem, pergunta: false, falhou: true });
 
     const data = result.data || {};
 
@@ -377,24 +380,22 @@ export function useVoiceAssistant() {
         };
       }
 
-      // Cobrança: monta o PIX copia e cola e abre o WhatsApp do cliente com a
-      // mensagem pronta. A pessoa só toca em enviar.
+      // Cobrança: abre a tela de cobrança com cliente e valor preenchidos. A
+      // pessoa confere e toca em Enviar. Abrir o WhatsApp direto daqui, sem
+      // toque, era bloqueado pelo navegador, e um nome entendido errado
+      // mandava a cobrança para outra pessoa.
       case 'charge_pix': {
-        const { clientName, amount, description } = data;
-        const valor = Math.abs(Number(amount));
+        const { clientName, amount } = data;
+        const valor = typeof amount === 'number' ? Math.round(Math.abs(amount) * 100) / 100 : lerValorEmReais(String(amount ?? ''));
         if (!clientName) return perguntar('Quem devo cobrar?');
-        if (!Number.isFinite(valor) || valor === 0) return perguntar(`Qual o valor da cobrança de ${clientName}?`);
-        const { pixChave, pixNome, pixCidade, studioName } = store.settings;
-        if (!pixChave || !chavePixValida(pixChave)) {
-          return informar('Cadastre sua chave PIX em Mais → Configurações para eu poder cobrar.');
+        if (!valor) return perguntar(`Qual o valor da cobrança de ${clientName}?`);
+        if (!chavePixValida(store.settings.pixChave ?? '')) {
+          return falhar('Cadastre sua chave PIX em Mais → Configurações para eu poder cobrar.');
         }
         const { cliente, aviso } = acharCliente(clientName);
         if (!cliente) return aviso;
-        const codigo = codigoPix({ chave: pixChave, nome: pixNome || studioName, cidade: pixCidade || 'BRASIL', valor });
-        const abriu = openWhatsApp(cliente.phone, mensagemDeCobranca(cliente.name, valor, codigo, description || undefined));
-        return informar(abriu
-          ? `Cobrança de R$ ${reais(valor)} pronta no WhatsApp de ${cliente.name}. É só enviar.`
-          : `${cliente.name} não tem um telefone válido. Cobre pelo perfil do cliente e copie o código.`);
+        store.setCobrancaPendente({ cliente: { name: cliente.name, phone: cliente.phone }, valor });
+        return informar(`Confira a cobrança de R$ ${reais(valor)} para ${cliente.name} e toque em Enviar.`);
       }
 
       default:

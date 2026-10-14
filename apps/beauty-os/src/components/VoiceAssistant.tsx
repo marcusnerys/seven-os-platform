@@ -213,7 +213,7 @@ export function VoiceAssistant() {
         return;
       }
 
-      if (resultado) setResult({ ...res, message: resultado.mensagem });
+      if (resultado) setResult({ ...res, ...(resultado.falhou ? { action: 'unknown' as const } : {}), message: resultado.mensagem });
       setLastCommand('');
       fecharDepois(geracao);
     } catch {

@@ -4,7 +4,7 @@ import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input } from '../
 import { ImportarContatos } from '../components/ImportarContatos';
 import { CobrarPix } from '../components/CobrarPix';
 import { Logo } from '../components/Logo';
-import { Search, Plus, Contact, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
+import { Search, Plus, Contact, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck, QrCode } from 'lucide-react';
 import { cn, escapeICS, formatarTelefoneBR, digitosTelefoneBR } from '../lib/utils';
 import { useStore, Client } from '../lib/store';
 import { getVertical } from '../lib/vertical';
@@ -413,10 +413,16 @@ export default function Clients() {
                     <Heart size={20} fill={favoritoAtual ? "currentColor" : "none"} />
                     {favoritoAtual ? (fem ? 'Favorita' : 'Favorito') : 'Favoritar'}
                   </Button>
+                  {/* Na mesma linha: uma linha a mais de botões cobria o fim do
+                      perfil. O perfil fecha para a cobrança não abrir por baixo dele. */}
+                  <Button variant="secondary" className="flex-1 h-14" onClick={() => {
+                    setCobrando({ name: selectedClient.name, phone: selectedClient.phone });
+                    setSelectedClient(null);
+                  }}>
+                    <QrCode size={20} />
+                    Cobrar
+                  </Button>
                 </div>
-                <Button variant="secondary" className="h-14" onClick={() => setCobrando({ name: selectedClient.name, phone: selectedClient.phone })}>
-                  Cobrar via PIX
-                </Button>
                 <div className="flex gap-4">
                   <Button variant="secondary" className="flex-1 h-14" onClick={() => {
                     setNewClient({

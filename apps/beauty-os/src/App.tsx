@@ -26,6 +26,7 @@ import { Toast, PWAInstallPrompt } from './components/UI';
 import DevTools from './screens/DevTools';
 import { Onboarding, applyTheme } from './components/ThemeOnboarding';
 import { getVertical } from './lib/vertical';
+import { CobrarPix } from './components/CobrarPix';
 
 const ADMIN_EMAIL = 'leshanot.meunegocio@gmail.com';
 
@@ -44,6 +45,8 @@ export default function App() {
   const configLoaded = useStore(state => state.configLoaded);
   const isRecoveringPassword = useStore(state => state.isRecoveringPassword);
   const settings = useStore(state => state.settings);
+  const cobrancaPendente = useStore(state => state.cobrancaPendente);
+  const setCobrancaPendente = useStore(state => state.setCobrancaPendente);
   const vertical = getVertical(settings.businessType);
   const location = useLocation();
 
@@ -139,6 +142,9 @@ export default function App() {
 
         {user && <AutomationService />}
         {user && <VoiceAssistant />}
+        {user && cobrancaPendente && (
+          <CobrarPix cliente={cobrancaPendente.cliente} valorInicial={cobrancaPendente.valor} aoFechar={() => setCobrancaPendente(null)} />
+        )}
         {user && <PainelImportacao />}
         {user && <SincronizarFinanceiro />}
 

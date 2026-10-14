@@ -3,6 +3,7 @@ import { CreditCard, Plus, Repeat, X } from 'lucide-react';
 import { useStore } from '../../lib/store';
 import { cn, dataLocal } from '../../lib/utils';
 import { somarMeses } from '../../lib/financeiro';
+import { lerValorEmReais } from '../../lib/pix';
 import { useRecorrentes, type Recorrente } from '../../lib/recorrentes';
 import { GlassCard, Modal } from '../UI';
 
@@ -113,7 +114,8 @@ function FormularioRecorrente({ tipo, aoFechar }: { tipo: 'fixo' | 'parcelado'; 
   const [nParcelas, setNParcelas] = React.useState('10');
   const [salvando, setSalvando] = React.useState(false);
 
-  const numero = Number(valor.replace(/\./g, '').replace(',', '.'));
+  // "80.50" era lido como 8050: o ponto virava separador de milhar.
+  const numero = lerValorEmReais(valor) ?? NaN;
   const parcelasN = Number(nParcelas);
   const diaN = Number(dia);
   const valido = descricao.trim() && Number.isFinite(numero) && numero > 0 && diaN >= 1 && diaN <= 31 && /^\d{4}-\d{2}$/.test(inicio)
