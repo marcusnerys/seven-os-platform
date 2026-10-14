@@ -2,6 +2,7 @@ import React, { useState, useEffect, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, Avatar, StatusBadge, Modal, Button, Toast, Input } from '../components/UI';
 import { ImportarContatos } from '../components/ImportarContatos';
+import { CobrarPix } from '../components/CobrarPix';
 import { Logo } from '../components/Logo';
 import { Search, Plus, Contact, Filter, Heart, ChevronRight, MessageCircle, Phone, Mail, Calendar, TrendingUp, Star as StarIcon, Tag, Trash2, CalendarCheck } from 'lucide-react';
 import { cn, escapeICS, formatarTelefoneBR, digitosTelefoneBR } from '../lib/utils';
@@ -25,6 +26,7 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportarOpen, setIsImportarOpen] = useState(false);
+  const [cobrando, setCobrando] = useState<{ name: string; phone: string } | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   
   useEffect(() => {
@@ -370,6 +372,8 @@ export default function Clients() {
         <Plus size={24} strokeWidth={2.5} />
       </button>
 
+      {cobrando && <CobrarPix cliente={cobrando} aoFechar={() => setCobrando(null)} />}
+
       <AnimatePresence>
         {isImportarOpen && (
           <Modal isOpen={isImportarOpen} onClose={() => setIsImportarOpen(false)} title="Importar contatos">
@@ -410,6 +414,9 @@ export default function Clients() {
                     {favoritoAtual ? (fem ? 'Favorita' : 'Favorito') : 'Favoritar'}
                   </Button>
                 </div>
+                <Button variant="secondary" className="h-14" onClick={() => setCobrando({ name: selectedClient.name, phone: selectedClient.phone })}>
+                  Cobrar via PIX
+                </Button>
                 <div className="flex gap-4">
                   <Button variant="secondary" className="flex-1 h-14" onClick={() => {
                     setNewClient({

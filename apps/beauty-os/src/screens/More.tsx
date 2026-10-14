@@ -470,6 +470,34 @@ export default function More() {
                   </div>
                 </div>
 
+                {/* PIX copia e cola: a cobrança pelo app e pela voz usa estes dados. */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-bold text-ios-text-secondary uppercase px-1">PIX para cobranças</label>
+                  <input
+                    className="w-full rounded-xl px-4 py-3 focus:outline-none text-[16px]"
+                    style={{ color: textPrimary, background: inputBg, border: `1px solid ${inputBorder}` }}
+                    placeholder="Chave PIX (e-mail, CPF/CNPJ, +55... ou aleatória)"
+                    value={editSettings.pixChave ?? ''}
+                    onChange={e => setEditSettings({ ...editSettings, pixChave: e.target.value })}
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 min-w-0 rounded-xl px-4 py-3 focus:outline-none text-[16px]"
+                      style={{ color: textPrimary, background: inputBg, border: `1px solid ${inputBorder}` }}
+                      placeholder="Nome do recebedor"
+                      value={editSettings.pixNome ?? ''}
+                      onChange={e => setEditSettings({ ...editSettings, pixNome: e.target.value })}
+                    />
+                    <input
+                      className="w-32 rounded-xl px-4 py-3 focus:outline-none text-[16px]"
+                      style={{ color: textPrimary, background: inputBg, border: `1px solid ${inputBorder}` }}
+                      placeholder="Cidade"
+                      value={editSettings.pixCidade ?? ''}
+                      onChange={e => setEditSettings({ ...editSettings, pixCidade: e.target.value })}
+                    />
+                  </div>
+                </div>
+
                 {/* Dízimo: o cartão do Financeiro some quando desligado; volta daqui. */}
                 <label className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer" style={{ background: inputBg, border: `1px solid ${inputBorder}` }}>
                   <span className="flex flex-col">

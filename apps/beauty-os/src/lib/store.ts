@@ -77,6 +77,10 @@ export interface Settings {
   /** Controle do dízimo no Financeiro (migration 0019). */
   dizimoAtivo?: boolean;
   dizimoPercentual?: number;
+  /** Cobrança PIX copia e cola (migration 0021). */
+  pixChave?: string;
+  pixNome?: string;
+  pixCidade?: string;
 }
 
 export interface Notification {
@@ -383,6 +387,9 @@ export const useStore = create<AppStore>()(
                 agendaToken: data.agenda_token ?? undefined,
                 dizimoAtivo: data.dizimo_ativo ?? true,
                 dizimoPercentual: Number(data.dizimo_percentual ?? 10),
+                pixChave: data.pix_chave ?? undefined,
+                pixNome: data.pix_nome ?? undefined,
+                pixCidade: data.pix_cidade ?? undefined,
               },
               ...(primeiraLeitura && data.onboarded_at ? {
                 hasOnboarded: true,
@@ -1058,6 +1065,9 @@ export const useStore = create<AppStore>()(
               business_type: newSettings.businessType,
               dizimo_ativo: newSettings.dizimoAtivo ?? true,
               dizimo_percentual: newSettings.dizimoPercentual ?? 10,
+              pix_chave: newSettings.pixChave?.trim() || null,
+              pix_nome: newSettings.pixNome?.trim() || null,
+              pix_cidade: newSettings.pixCidade?.trim() || null,
               theme_accent: themeAccent,
               theme_bg: themeBg,
             });
