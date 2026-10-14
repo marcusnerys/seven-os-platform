@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { dataLocal, acharPorNome, semAcento, digitosTelefoneBR, formatarTelefoneBR } from '../lib/utils';
 import { openWhatsApp } from '../lib/whatsapp';
 import { chavePixValida, lerValorEmReais } from '../lib/pix';
+import { areasDaAcao, podeFazer, NOME_DA_AREA } from '../lib/permissoes';
 
 const reais = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -119,6 +120,12 @@ export function useVoiceAssistant() {
       'update_client_vip', 'create_service', 'search_client', 'send_whatsapp', 'list_inactive_clients', 'delete_client', 'charge_pix'];
     if (!getVertical(store.settings.businessType).hasScheduling && SO_COM_AGENDA.includes(result.action)) {
       return { mensagem: 'No controle de finanças pessoais não há agenda nem clientes. Posso registrar gastos, receitas ou mostrar o resumo do mês.', pergunta: false };
+    }
+    // Conta compartilhada: o banco já recusaria, mas a resposta seria um erro
+    // genérico. Aqui a pessoa fica sabendo o porquê.
+    if (!podeFazer({ papel: store.papel, areas: store.areas }, result.action)) {
+      const areas = (areasDaAcao(result.action) ?? []).map(a => NOME_DA_AREA[a]).join(' ou ');
+      return falhar(`Você não tem acesso a ${areas}. Peça para quem é dono do negócio liberar em Mais → Equipe.`);
     }
     const hoje = dataLocal();
     const dataValida = (d: unknown) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);

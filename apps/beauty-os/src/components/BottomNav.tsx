@@ -3,6 +3,7 @@ import { Home, Calendar, CircleDollarSign, Users, Menu, Mic } from 'lucide-react
 import { cn } from '../lib/utils';
 import { useStore } from '../lib/store';
 import { getVertical } from '../lib/vertical';
+import { podeAbrirAba } from '../lib/permissoes';
 
 interface BottomNavProps {
   activeTab: string;
@@ -13,6 +14,8 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const setIsVoiceActive = useStore(state => state.setIsVoiceActive);
   const settings = useStore(state => state.settings);
   const vertical = getVertical(settings.businessType);
+  const papel = useStore(state => state.papel);
+  const areas = useStore(state => state.areas);
   const tabs = [
     { id: 'dashboard', label: 'Início', icon: Home },
     ...(vertical.hasScheduling
@@ -28,7 +31,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     { id: 'voice', label: 'Voz', icon: Mic, isAction: true },
     { id: 'financial', label: 'Financeiro', icon: CircleDollarSign },
     { id: 'more', label: 'Mais', icon: Menu },
-  ];
+  ].filter(tab => podeAbrirAba({ papel, areas }, tab.id));
 
   return (
     <div className="w-full relative">

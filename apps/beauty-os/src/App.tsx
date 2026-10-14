@@ -27,6 +27,11 @@ import DevTools from './screens/DevTools';
 import { Onboarding, applyTheme } from './components/ThemeOnboarding';
 import { getVertical } from './lib/vertical';
 import { CobrarPix } from './components/CobrarPix';
+import { guardarConviteDoLink, conviteGuardado, podeAbrirAba } from './lib/permissoes';
+import { AceitarConviteDoLink } from './components/EquipeAcesso';
+
+// Antes de tudo: o link de convite chega com ?convite=... e precisa sobreviver ao login.
+guardarConviteDoLink();
 
 const ADMIN_EMAIL = 'leshanot.meunegocio@gmail.com';
 
@@ -47,6 +52,10 @@ export default function App() {
   const settings = useStore(state => state.settings);
   const cobrancaPendente = useStore(state => state.cobrancaPendente);
   const setCobrancaPendente = useStore(state => state.setCobrancaPendente);
+  const papel = useStore(state => state.papel);
+  const areas = useStore(state => state.areas);
+  const empresaId = useStore(state => state.empresaId);
+  const convitePendente = useStore(state => state.convitePendente);
   const vertical = getVertical(settings.businessType);
   const location = useLocation();
 
@@ -55,6 +64,11 @@ export default function App() {
   useEffect(() => {
     applyTheme(themeAccent, themeBg);
   }, [themeAccent, themeBg]);
+
+  // Convite vindo de link (guardado antes do login).
+  useEffect(() => {
+    useStore.getState().setConvitePendente(conviteGuardado());
+  }, []);
 
   // Volta do login Google (?google=conectado|erro|...): avisa uma vez.
   useEffect(() => {
@@ -68,6 +82,11 @@ export default function App() {
       setActiveTab('dashboard');
     }
   }, [vertical.hasScheduling, activeTab, setActiveTab]);
+
+  // Quem é da equipe e perdeu (ou não tem) a área desta aba volta ao início.
+  useEffect(() => {
+    if (!podeAbrirAba({ papel, areas }, activeTab)) setActiveTab('dashboard');
+  }, [papel, areas, activeTab, setActiveTab]);
 
   const isPublicRoute = location.pathname.startsWith('/book/');
 
@@ -153,8 +172,12 @@ export default function App() {
           {/* Espera a leitura das configurações: conta já configurada num
               aparelho novo não pode ver o questionário, que começava em
               "Outro negócio" e sobrescrevia o que estava salvo. */}
-          {user && configLoaded && !hasOnboarded && <Onboarding />}
+          {/* O questionário configura o negócio: é do dono. Quem entrou por
+              convite já encontra o negócio pronto. */}
+          {user && empresaId && configLoaded && !hasOnboarded && papel === 'dono' && !convitePendente && <Onboarding />}
         </AnimatePresence>
+
+        {user && <AceitarConviteDoLink />}
 
         <PWAInstallPrompt />
 

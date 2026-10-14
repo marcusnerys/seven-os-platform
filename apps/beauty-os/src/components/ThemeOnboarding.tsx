@@ -8,6 +8,7 @@ import { ImportarContatos } from './ImportarContatos';
 import { SincronizarCalendario } from './SincronizarCalendario';
 import { GoogleAgenda } from './GoogleAgenda';
 import { lerValorEmReais } from '../lib/pix';
+import { EntrarComCodigo } from './EquipeAcesso';
 
 const ACCENT_COLORS = [
   { name: 'Dourado', value: '#D4AF37', neon: '#F5D062', label: 'Clássico' },
@@ -70,6 +71,8 @@ export function Onboarding() {
   const avatarAtual = useStore(state => state.user?.user_metadata?.avatar_url as string | undefined);
 
   const [stepIndex, setStepIndex] = useState(0);
+  // Quem foi convidado para a equipe de alguém não monta negócio próprio.
+  const [temConvite, setTemConvite] = useState(false);
   const [businessType, setBusinessType] = useState<BusinessType>(settings.businessType ?? 'generic');
   const [businessName, setBusinessName] = useState(
     settings.studioName && settings.studioName !== 'Meu Negócio' ? settings.studioName : ''
@@ -267,6 +270,16 @@ export function Onboarding() {
                   </button>
                 );
               })}
+              {temConvite ? (
+                <div className="p-4 rounded-2xl flex flex-col gap-2" style={{ background: surface }}>
+                  <p className="text-[13px]" style={{ color: textSecondary }}>Digite o código que você recebeu para entrar na equipe.</p>
+                  <EntrarComCodigo />
+                </div>
+              ) : (
+                <button onClick={() => setTemConvite(true)} className="text-[13px] underline underline-offset-2 py-2" style={{ color: textSecondary }}>
+                  Recebi um convite para a equipe de alguém
+                </button>
+              )}
             </motion.div>
           )}
 

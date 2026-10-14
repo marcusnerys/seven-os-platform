@@ -48,13 +48,21 @@ async function rest(caminho: string, init: RequestInit = {}) {
   return texto ? JSON.parse(texto) : null;
 }
 
-/** Quem está chamando, pelo token do app. */
-async function quemChama(req: Request): Promise<string | null> {
+/**
+ * Quem está chamando, pelo token do app, e de qual empresa faz parte. Com a
+ * conta compartilhada (migration 0022) a empresa pode não ser o próprio login,
+ * e só o dono mexe na conexão com o Google.
+ */
+async function quemChama(req: Request): Promise<{ empresa: string; dono: boolean } | null> {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: ANON, Authorization: `Bearer ${token}` } });
   if (!r.ok) return null;
-  return (await r.json()).id ?? null;
+  const uid: string | undefined = (await r.json()).id;
+  if (!uid) return null;
+  const [m] = await rest(`beautyos_membros?user_id=eq.${uid}&select=empresa_id,papel`);
+  if (!m) return null;
+  return { empresa: m.empresa_id, dono: m.papel === 'dono' };
 }
 
 // ─── Google ──────────────────────────────────────────────────────────────
@@ -121,7 +129,7 @@ async function enviar(con: Conexao, acesso: string, a: Agendamento | null, event
 
   let cliente = a.client_name || 'Cliente';
   if (a.client_id) {
-    const [c] = await rest(`beautyos_clients?id=eq.${a.client_id}&select=name`);
+    const [c] = await rest(`beautyos_clients?id=eq.${a.client_id}&empresa_id=eq.${a.empresa_id}&select=name`);
     if (c?.name) cliente = c.name;
   }
   const evento = eventoDo(a, cliente);
@@ -136,6 +144,16 @@ async function enviar(con: Conexao, acesso: string, a: Agendamento | null, event
   if (!r.ok) throw new Error(`Google ${r.status} ao criar: ${(await r.text()).slice(0, 200)}`);
   const criado = await r.json();
   await rest(`beautyos_appointments?id=eq.${a.id}`, { method: 'PATCH', body: JSON.stringify({ google_evento_id: criado.id }) });
+}
+
+/** O evento do Google foi criado por este app para este agendamento? */
+async function eventoEhDoAgendamento(con: Conexao, acesso: string, eventoId: string, agendamentoId: string) {
+  const r = await google(acesso, 'GET', `calendars/${encodeURIComponent(con.calendario_id)}/events/${encodeURIComponent(eventoId)}`);
+  if (r.status === 404 || r.status === 410) return false;
+  // Outro erro (limite, Google fora): registra, em vez de deixar o evento para trás calado.
+  if (!r.ok) throw new Error(`Google ${r.status} ao conferir o evento`);
+  const e = await r.json();
+  return e?.extendedProperties?.private?.leshanotId === agendamentoId;
 }
 
 async function conexaoDe(empresa: string): Promise<Conexao | null> {
@@ -185,27 +203,39 @@ Deno.serve(async (req: Request) => {
       if (typeof id !== 'string' || typeof empresa_id !== 'string') return json({ error: 'corpo inválido' }, 400);
       const con = await conexaoDe(empresa_id);
       if (!con) return json({ ok: true, ignorado: 'sem conexão' });
-      const [a] = apagado ? [null] : await rest(
+      // A rota é pública (o gatilho não manda token). Por isso o corpo não
+      // decide nada: o agendamento é sempre relido e, se ainda existe, o
+      // evento só é atualizado. Apagar exige que o agendamento tenha sumido
+      // de fato e que o evento seja deste agendamento.
+      const [a] = await rest(
         `beautyos_appointments?id=eq.${id}&empresa_id=eq.${empresa_id}` +
         '&select=id,empresa_id,client_id,client_name,service,date,time,duration,status,notes,google_evento_id',
       );
       try {
-        await enviar(con, await tokenDeAcesso(con.refresh_token), a ?? null, typeof evento === 'string' ? evento : null);
+        const acesso = await tokenDeAcesso(con.refresh_token);
+        if (a) {
+          await enviar(con, acesso, a, null);
+        } else if (apagado && typeof evento === 'string' && await eventoEhDoAgendamento(con, acesso, evento, id)) {
+          await enviar(con, acesso, null, evento);
+        }
       } catch (erro) {
         await registrarErro(empresa_id, erro);
       }
       return json({ ok: true });
     }
 
-    const empresa = await quemChama(req);
-    if (!empresa) return json({ error: 'Entre no app de novo.' }, 401);
+    const quem = await quemChama(req);
+    if (!quem) return json({ error: 'Entre no app de novo.' }, 401);
+    const empresa = quem.empresa;
 
     if (rota === 'status') {
       const con = await conexaoDe(empresa);
       const [extra] = con ? await rest(`beautyos_google?empresa_id=eq.${empresa}&select=ultimo_erro`) : [null];
-      return json({ configurado, conectado: Boolean(con), email: con?.email ?? null, erro: extra?.ultimo_erro ?? null });
+      // O e-mail é a conta Google pessoal de quem conectou: só o dono vê.
+      return json({ configurado, conectado: Boolean(con), email: quem.dono ? con?.email ?? null : null, erro: extra?.ultimo_erro ?? null });
     }
 
+    if (!quem.dono) return json({ error: 'Só quem é dono do negócio pode mexer na conexão com o Google.' }, 403);
     if (!configurado) return json({ error: 'A integração com o Google ainda não foi ativada.' }, 503);
 
     if (rota === 'iniciar') {

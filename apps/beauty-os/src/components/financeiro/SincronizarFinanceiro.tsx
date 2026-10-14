@@ -10,16 +10,17 @@ import { useRecorrentes } from '../../lib/recorrentes';
  * recebe o lançamento do mês novo.
  */
 export function SincronizarFinanceiro() {
-  const userId = useStore(state => state.user?.id);
+  const empresaId = useStore(state => state.empresaId);
+  const veFinanceiro = useStore(state => state.papel === 'dono' || state.areas.includes('financeiro'));
 
   React.useEffect(() => {
-    if (!userId) return;
+    if (!empresaId || !veFinanceiro) return;
     const { carregar, limpar } = useRecorrentes.getState();
     carregar();
     let espera: ReturnType<typeof setTimeout> | undefined;
     const canal = supabase
-      .channel(`recorrentes-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_recorrentes', filter: `empresa_id=eq.${userId}` }, () => {
+      .channel(`recorrentes-${empresaId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'beautyos_recorrentes', filter: `empresa_id=eq.${empresaId}` }, () => {
         clearTimeout(espera);
         espera = setTimeout(carregar, 400);
       })
@@ -32,7 +33,7 @@ export function SincronizarFinanceiro() {
       document.removeEventListener('visibilitychange', aoVoltar);
       limpar();
     };
-  }, [userId]);
+  }, [empresaId, veFinanceiro]);
 
   return null;
 }

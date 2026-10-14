@@ -51,7 +51,8 @@ type Estado = {
 
 export const useRecorrentes = create<Estado>((set, get) => {
   const empresa = () => {
-    const id = useStore.getState().user?.id;
+    const { user, empresaId } = useStore.getState();
+    const id = empresaId ?? user?.id;
     if (!id) throw new Error('Entre no app de novo.');
     return id;
   };
